@@ -33,11 +33,11 @@ right_arm.set_planner_id('RRTConnectkConfigDefault')
 right_arm.set_planning_time(20)
 
 right_gripper.reboot()
-rospy.sleep(1.0)
+rospy.sleep(3.0)
 right_gripper.calibrate()
 #right_gripper.set_holding_force(10)
 tfl = tf.TransformListener()
-rospy.sleep(1.0)
+rospy.sleep(3.0)
 assert right_gripper.is_ready()
 
 def planning():
@@ -85,29 +85,40 @@ def planning():
     # time.sleep(1)
     # print pose
     # return
-    pose_i, pose_g = initialize()
-    print("Pose I: {}".format(pose_i.position.z))
-    print("Pose G: {}".format(pose_g.position.z))
+    # pose_i, pose_g = initialize()
+    actions = initialize()
+    # print("Pose I: {}".format(pose_i.position.z))
+    # print("Pose G: {}".format(pose_g.position.z))
 
     
-
-    while True:
-        update_pose()
-        i = raw_input("Press enter to continue, type anything to exit")
-        if len(i) > 0:
+    for action in actions:
+        if action.grip_action == 1:
+            do_grip()
+        move(action.position)
+        if action.grip_action == -1:
             right_gripper.open()
-            rospy.signal_shutdown(".")
-            exit()
+    return
+            
+     
 
-        move(pose_i, has_orientation_constraint=True)
-        update_pose()
-        print("Current z {}".format(pose.position.z))
-        print("Pose I: {}".format(pose_i.position.z))
-        do_grip()
-        move(pose_g, has_orientation_constraint=True)
-        update_pose()
-        print("Current z: {}".format(pose.position.z))
-        print("Pose G: {}".format(pose_g.position.z))
+
+    # while True:
+        # update_pose()
+        # i = raw_input("Press enter to continue, type anything to exit")
+        # if len(i) > 0:
+            # right_gripper.open()
+            # rospy.signal_shutdown(".")
+            # exit()
+# 
+        # move(pose_i, has_orientation_constraint=True)
+        # update_pose()
+        # print("Current z {}".format(pose.position.z))
+        # print("Pose I: {}".format(pose_i.position.z))
+        # do_grip()
+        # move(pose_g, has_orientation_constraint=True)
+        # update_pose()
+        # print("Current z: {}".format(pose.position.z))
+        # print("Pose G: {}".format(pose_g.position.z))
 
 
         # fixed pose things
@@ -117,14 +128,24 @@ def planning():
 def initialize():
     assert right_gripper.is_ready()
     right_gripper.open()
+    actions = []
+
     start_pose = deepcopy(pose)
-    end_pose = deepcopy(pose)
-    end_pose.position.z += 0.1
+    actions.append(Action(start_pose, 1))
+
+    pose2 = deepcopy(pose)
+    pose2.position.z += 0.2
+    actions.append(Action(pose2, 0))
+    
+    pose3 = deepcopy(pose)
+    pose3.position.x += 0.2
+    actions.append(Action(pose3, -1))
+    
     wait_time = 3.0
-    move(end_pose,has_orientation_constraint=True)
     print('Finished initializing, wait {} seconds'.format(wait_time))
     rospy.sleep(wait_time)
-    return start_pose, end_pose
+
+    return actions
 
 def move(pose, has_orientation_constraint=True):
     right_arm.set_pose_target(pose)
@@ -191,6 +212,13 @@ def do_grip():
     #     print('Opening...')
     #     right_gripper.open()
     #     rospy.sleep(1.0)
+
+class Action():
+    def __init__(self, position, grip_action):
+        self.position = position
+        self.grip_action = grip_action # 1: grip, 0: nothing, -1: release
+
+
 
 if __name__ == '__main__':
     try:

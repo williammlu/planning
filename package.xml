@@ -63,6 +63,16 @@
   <build_export_depend>std_msgs</build_export_depend>
   <buildtool_depend>catkin</buildtool_depend>
 
+  <depend>moveit_ros_move_group</depend>
+  <depend>moveit_planners_ompl</depend>
+  <depend>moveit_kinematics</depend>
+  <depend>moveit_ros_visualization</depend>
+  <depend>joint_state_publisher</depend>
+  <depend>robot_state_publisher</depend>
+  <depend>xacro</depend>
+  <depend>sawyer_description</depend>
+
+
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>intera_core_msgs</exec_depend>
   <exec_depend>roscpp</exec_depend>
