@@ -151,8 +151,8 @@ def initialize():
 
     return actions
 
-def move(pose, has_orientation_constraint=True):
-    right_arm.set_pose_target(pose)
+def move(goal_pose, has_orientation_constraint=True):
+    right_arm.set_pose_target(goal_pose)
     right_arm.set_start_state_to_current_state()
 
     if (has_orientation_constraint):
@@ -170,8 +170,14 @@ def move(pose, has_orientation_constraint=True):
 
     right_arm.set_goal_position_tolerance(0.005) 
     right_arm.set_num_planning_attempts(3) # take best of 3 for accuracy of 5 mm
+    pdb.set_trace()
+
     right_plan = right_arm.plan()
     right_arm.execute(right_plan)
+    # plan,fraction = right_arm.compute_cartesian_path([],  0.01, 0.01)
+    # print str(plan)
+    # print str(fraction)
+    # right_arm.execute(plan)
 
 
 
