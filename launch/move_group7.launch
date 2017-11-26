@@ -17,10 +17,6 @@
 
 
 
-
-
-
-
 <arg name="config" default="true"/>
 <!--   <arg name="rviz_config" default="$(find sawyer_moveit_config)/launch/moveit.rviz" /> -->
 
@@ -163,6 +159,6 @@
     <param name="planning_scene_monitor/publish_transforms_updates" value="$(arg publish_monitored_planning_scene)" />
   </node>
 
-<!--   <node name="planning_node" pkg="planning" type="planning_node.py" /> -->
+  <node name="planning_node" pkg="planning" type="planning_node.py" />
 
 </launch>

@@ -38,6 +38,7 @@ right_gripper.calibrate()
 #right_gripper.set_holding_force(10)
 tfl = tf.TransformListener()
 rospy.sleep(3.0)
+import pdb; pdb.set_trace()
 assert right_gripper.is_ready()
 
 def planning():
