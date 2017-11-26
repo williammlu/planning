@@ -24,21 +24,21 @@ rospy.init_node('planning')
 pose = None
 moveit_commander.roscpp_initialize(sys.argv)
 
-
 right_gripper = robot_gripper.Gripper('right')
 robot = moveit_commander.RobotCommander()
 scene = moveit_commander.PlanningSceneInterface()
 right_arm = moveit_commander.MoveGroupCommander('right_arm')
 right_arm.set_planner_id('RRTConnectkConfigDefault')
 right_arm.set_planning_time(20)
-
-right_gripper.reboot()
-rospy.sleep(3.0)
-right_gripper.calibrate()
-#right_gripper.set_holding_force(10)
 tfl = tf.TransformListener()
-rospy.sleep(3.0)
-assert right_gripper.is_ready()
+
+def initialize_gripper():
+    right_gripper.reboot()
+    rospy.sleep(3.0)
+    right_gripper.calibrate()
+    #right_gripper.set_holding_force(10)
+    rospy.sleep(3.0)
+    assert right_gripper.is_ready()
 
 def planning():
     #Set up the right gripper
@@ -92,11 +92,8 @@ def planning():
 
     
     for action in actions:
-        if action.grip_action == 1:
-            do_grip()
-        move(action.position)
-        if action.grip_action == -1:
-            right_gripper.open()
+        action.execute()
+    print "Action sequence finished"
     return
             
      
@@ -130,18 +127,25 @@ def initialize():
     right_gripper.open()
     actions = []
 
-    start_pose = deepcopy(pose)
-    actions.append(Action(start_pose, 1))
-
+    pose1 = deepcopy(pose)
     pose2 = deepcopy(pose)
-    pose2.position.z += 0.2
-    actions.append(Action(pose2, 0))
-    
+    pose2.position.z += 0.4
     pose3 = deepcopy(pose)
     pose3.position.x += 0.2
-    actions.append(Action(pose3, -1))
+
+
+    actions.append(Action(Action.MOVE, pose2))
+    actions.append(Action(Action.FUNCTION, initialize_gripper))
+    actions.append(Action(Action.MOVE, pose1))
+    actions.append(Action(Action.GRIPPER, Action.CLOSE))
+    actions.append(Action(Action.MOVE, pose2))
+    actions.append(Action(Action.MOVE, pose3))
+    actions.append(Action(Action.GRIPPER, Action.OPEN))
+    actions.append(Action(Action.MOVE, pose2))
+    actions.append(Action(Action.MOVE, pose1))
+
     
-    wait_time = 3.0
+    wait_time = 2.0
     print('Finished initializing, wait {} seconds'.format(wait_time))
     rospy.sleep(wait_time)
 
@@ -164,16 +168,16 @@ def move(pose, has_orientation_constraint=True):
         consts.orientation_constraints = [orien_const]
         right_arm.set_path_constraints(consts)
 
-    right_arm.set_goal_position_tolerance(0.001)
-    right_arm.set_num_planning_attempts(5)
+    right_arm.set_goal_position_tolerance(0.005) 
+    right_arm.set_num_planning_attempts(3) # take best of 3 for accuracy of 5 mm
     right_plan = right_arm.plan()
     right_arm.execute(right_plan)
 
 
 
 def do_grip():
-    c = 1
-    MAX_TRIES=5
+    # c = 1
+    # MAX_TRIES=5
     assert right_gripper.is_ready()
     right_gripper.open()
     rospy.sleep(2.0)
@@ -214,9 +218,35 @@ def do_grip():
     #     rospy.sleep(1.0)
 
 class Action():
-    def __init__(self, position, grip_action):
-        self.position = position
-        self.grip_action = grip_action # 1: grip, 0: nothing, -1: release
+    # def __init__(self, position, grip_action):
+        # self.position = position
+        # self.grip_action = grip_action # 1: grip, 0: nothing, -1: release
+    GRIPPER=1
+    MOVE=2
+    FUNCTION=3
+
+    CLOSE = 1
+    OPEN = -1
+    def __init__(self, action_type, value):
+        self.action_type = action_type
+        self.value = value
+    
+    def execute(self):
+        if self.action_type == Action.GRIPPER:
+            if self.value == Action.CLOSE:
+                print "CLOSING GRIPPER"
+                do_grip()
+            elif self.value == Action.OPEN:
+                print "OPENING GRIPPER"
+                right_gripper.open()
+        elif self.action_type == Action.MOVE:
+            print "MOVING TO " + str(self.value)
+            move(self.value)
+        elif self.action_type == Action.FUNCTION:
+            print "RUNNING CUSTOM FUNCTION"
+            self.value()
+
+
 
 
 
