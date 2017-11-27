@@ -28,9 +28,8 @@ right_gripper = robot_gripper.Gripper('right')
 robot = moveit_commander.RobotCommander()
 scene = moveit_commander.PlanningSceneInterface()
 right_arm = moveit_commander.MoveGroupCommander('right_arm')
-right_arm.set_planner_id('RRTConnectkConfigDefault')
+# right_arm.set_planner_id('RRTConnectkConfigDefault')
 right_arm.set_planning_time(20)
-right_arm.set_planner_id("RRTConnectkConfigDefault")
 tfl = tf.TransformListener()
 
 def initialize_gripper():
@@ -126,41 +125,40 @@ def initialize():
     assert right_gripper.is_ready()
     right_gripper.open()
     actions = []
+    global pose
 
 
     tf_listener = tf.TransformListener()
     while not rospy.is_shutdown():
         try:
-            (trans,rot) = tf_listener.lookupTransform('/color_picker_8', '/base', rospy.Time(0))
+            (trans,rot) = tf_listener.lookupTransform('/color_tracker_8', '/base', rospy.Time(0))
             ar_pose1 = Pose()
             ar_pose1.position.x = trans[0]
             ar_pose1.position.y = trans[1]
-            ar_pose1.position.z = trans[2] + 0.05
+            ar_pose1.position.z = trans[2]
 
 
-            ar_pose1.orientation = deepcopy(pose.orientation)
-            # ar_pose1.orientation.x = rot[0]
-            # ar_pose1.orientation.y = rot[1]
-            # ar_pose1.orientation.z = rot[2]
-            # ar_pose1.orientation.w = rot[3]
+            ar_pose1.orientation = deepcopy(pose).orientation
+            print "AR Pose 1"
             print str(ar_pose1)
+            # ar_pose1.orientation.x = rot[0] # ar_pose1.orientation.y = rot[1] # ar_pose1.orientation.z = rot[2] # ar_pose1.orientation.w = rot[3] print str(ar_pose1)
+            break
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
             continue
     while not rospy.is_shutdown():
         try:
-            (trans,rot) = tf_listener.lookupTransform('/color_picker_9', '/base', rospy.Time(0))
+            (trans,rot) = tf_listener.lookupTransform('/color_tracker_0', '/base', rospy.Time(0))
             ar_pose2 = Pose()
             ar_pose2.position.x = trans[0]
             ar_pose2.position.y = trans[1]
-            ar_pose2.position.z = trans[2] + 0.05
+            ar_pose2.position.z = trans[2]
 
 
-            ar_pose2.orientation = deepcopy(pose.orientation)
+            ar_pose2.orientation = deepcopy(pose).orientation
+            print "AR Pose 2"
             print str(ar_pose2)
-            # ar_pose2.orientation.x = rot[0]
-            # ar_pose2.orientation.y = rot[1]
-            # ar_pose2.orientation.z = rot[2]
-            # ar_pose2.orientation.w = rot[3]
+            # ar_pose2.orientation.x = rot[0] # ar_pose2.orientation.y = rot[1] # ar_pose2.orientation.z = rot[2] # ar_pose2.orientation.w = rot[3]
+            break
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
             continue
     
@@ -182,7 +180,6 @@ def initialize():
     mm_pose = ar_pose1
     start_pose = deepcopy(pose)
     mouth_pose = ar_pose2
-
     actions.append(Action(Action.FUNCTION, initialize_gripper))
     actions.append(Action(Action.MOVE, mm_pose))
     actions.append(Action(Action.GRIPPER, Action.CLOSE))
