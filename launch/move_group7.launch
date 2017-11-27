@@ -16,10 +16,6 @@
 
 
 
-
-
-
-
 <arg name="config" default="true"/>
 <!--   <arg name="rviz_config" default="$(find sawyer_moveit_config)/launch/moveit.rviz" /> -->
 

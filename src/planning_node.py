@@ -127,22 +127,70 @@ def initialize():
     right_gripper.open()
     actions = []
 
-    pose1 = deepcopy(pose)
-    pose2 = deepcopy(pose)
-    pose2.position.z += 0.4
-    pose3 = deepcopy(pose)
-    pose3.position.x += 0.2
+
+    tf_listener = tf.TransformListener()
+    while not rospy.is_shutdown():
+        try:
+            (trans,rot) = tf_listener.lookupTransform('/color_picker_8', '/base', rospy.Time(0))
+            ar_pose1 = Pose()
+            ar_pose1.position.x = trans[0]
+            ar_pose1.position.y = trans[1]
+            ar_pose1.position.z = trans[2] + 0.05
 
 
-    actions.append(Action(Action.MOVE, pose2))
+            ar_pose1.orientation = deepcopy(pose.orientation)
+            # ar_pose1.orientation.x = rot[0]
+            # ar_pose1.orientation.y = rot[1]
+            # ar_pose1.orientation.z = rot[2]
+            # ar_pose1.orientation.w = rot[3]
+            print str(ar_pose1)
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+            continue
+    while not rospy.is_shutdown():
+        try:
+            (trans,rot) = tf_listener.lookupTransform('/color_picker_9', '/base', rospy.Time(0))
+            ar_pose2 = Pose()
+            ar_pose2.position.x = trans[0]
+            ar_pose2.position.y = trans[1]
+            ar_pose2.position.z = trans[2] + 0.05
+
+
+            ar_pose2.orientation = deepcopy(pose.orientation)
+            print str(ar_pose2)
+            # ar_pose2.orientation.x = rot[0]
+            # ar_pose2.orientation.y = rot[1]
+            # ar_pose2.orientation.z = rot[2]
+            # ar_pose2.orientation.w = rot[3]
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+            continue
+    
+    # pose1 = deepcopy(pose)
+    # pose2 = deepcopy(pose)
+    # pose2.position.z += 0.4
+    # pose3 = deepcopy(pose)
+    # pose3.position.x += 0.2
+    # actions.append(Action(Action.MOVE, pose2))
+    # actions.append(Action(Action.FUNCTION, initialize_gripper))
+    # actions.append(Action(Action.MOVE, pose1))
+    # actions.append(Action(Action.GRIPPER, Action.CLOSE))
+    # actions.append(Action(Action.MOVE, pose2))
+    # actions.append(Action(Action.MOVE, pose3))
+    # actions.append(Action(Action.GRIPPER, Action.OPEN))
+    # actions.append(Action(Action.MOVE, pose2))
+    # actions.append(Action(Action.MOVE, pose1))
+
+    mm_pose = ar_pose1
+    start_pose = deepcopy(pose)
+    mouth_pose = ar_pose2
+
     actions.append(Action(Action.FUNCTION, initialize_gripper))
-    actions.append(Action(Action.MOVE, pose1))
+    actions.append(Action(Action.MOVE, mm_pose))
     actions.append(Action(Action.GRIPPER, Action.CLOSE))
-    actions.append(Action(Action.MOVE, pose2))
-    actions.append(Action(Action.MOVE, pose3))
+    actions.append(Action(Action.MOVE, start_pose))
+    actions.append(Action(Action.MOVE, mouth_pose))
     actions.append(Action(Action.GRIPPER, Action.OPEN))
-    actions.append(Action(Action.MOVE, pose2))
-    actions.append(Action(Action.MOVE, pose1))
+    actions.append(Action(Action.MOVE, start_pose))
+    actions.append(Action(Action.MOVE, mm_pose))
 
     
     wait_time = 2.0
@@ -173,6 +221,7 @@ def move(goal_pose, has_orientation_constraint=True):
     # pdb.set_trace()
 
     right_plan = right_arm.plan()
+    raw_input("Enter anything to compute")
     right_arm.execute(right_plan)
     # plan,fraction = right_arm.compute_cartesian_path([],  0.01, 0.01)
     # print str(plan)
