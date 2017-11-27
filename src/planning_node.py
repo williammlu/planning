@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # license removed for brevity
-
-#from baxter_interface import gripper as robot_gripper
+from baxter_interface import gripper as robot_gripper
 from geometry_msgs.msg import Point
 from geometry_msgs.msg import Pose
 from geometry_msgs.msg import Quaternion
@@ -25,11 +24,13 @@ pose = None
 moveit_commander.roscpp_initialize(sys.argv)
 
 right_gripper = robot_gripper.Gripper('right')
+# pdb.set_trace()
 robot = moveit_commander.RobotCommander()
 scene = moveit_commander.PlanningSceneInterface()
 right_arm = moveit_commander.MoveGroupCommander('right_arm')
 right_arm.set_planner_id('RRTConnectkConfigDefault')
 right_arm.set_planning_time(20)
+right_arm.set_planner_id("RRTConnectkConfigDefault")
 tfl = tf.TransformListener()
 
 def initialize_gripper():
@@ -45,7 +46,6 @@ def planning():
 
     rate = rospy.Rate(10) # 10hz
     def gripper_state_callback(message):
-        # print(message.pose)
         global pose
         pose = message.pose
     def update_pose():
@@ -68,8 +68,8 @@ def planning():
     global pose
 
     update_pose()
-    print pose
-    print("--------")
+    rospy.logdebug(str(pose))
+    rospy.logdebug("--------")
 
     #pose = right_arm.get_current_pose().pose
     #print pose
@@ -93,7 +93,7 @@ def planning():
     
     for action in actions:
         action.execute()
-    print "Action sequence finished"
+    rospy.logdebug( "Action sequence finished")
     return
             
      
@@ -146,7 +146,7 @@ def initialize():
 
     
     wait_time = 2.0
-    print('Finished initializing, wait {} seconds'.format(wait_time))
+    rospy.logdebug('Finished initializing, wait {} seconds'.format(wait_time))
     rospy.sleep(wait_time)
 
     return actions
@@ -168,9 +168,9 @@ def move(goal_pose, has_orientation_constraint=True):
         consts.orientation_constraints = [orien_const]
         right_arm.set_path_constraints(consts)
 
-    right_arm.set_goal_position_tolerance(0.005) 
+    right_arm.set_goal_position_tolerance(0.01) 
     right_arm.set_num_planning_attempts(3) # take best of 3 for accuracy of 5 mm
-    pdb.set_trace()
+    # pdb.set_trace()
 
     right_plan = right_arm.plan()
     right_arm.execute(right_plan)
@@ -240,16 +240,16 @@ class Action():
     def execute(self):
         if self.action_type == Action.GRIPPER:
             if self.value == Action.CLOSE:
-                print "CLOSING GRIPPER"
+                rospy.logdebug( "CLOSING GRIPPER")
                 do_grip()
             elif self.value == Action.OPEN:
-                print "OPENING GRIPPER"
+                rospy.logdebug( "OPENING GRIPPER")
                 right_gripper.open()
         elif self.action_type == Action.MOVE:
-            print "MOVING TO " + str(self.value)
+            rospy.logdebug( "MOVING TO " + str(self.value))
             move(self.value)
         elif self.action_type == Action.FUNCTION:
-            print "RUNNING CUSTOM FUNCTION"
+            rospy.logdebug( "RUNNING CUSTOM FUNCTION")
             self.value()
 
 

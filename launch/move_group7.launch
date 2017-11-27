@@ -9,8 +9,7 @@
 
   <!-- Start the Joint Trajectory Action Server -->
   <node name="sdk_joint_trajectory_action_server" pkg="intera_interface"
-  type="joint_trajectory_action_server.py" args="--limb $(arg limb) --mode position"
-  required="true" />
+  type="joint_trajectory_action_server.py" />
 
 
 
@@ -34,7 +33,7 @@
   <!-- Add controller box collision shape to check for link collisions if set to true-->
   <arg name="controller_box" default="true"/>
   <!-- Left and electric gripper arg. Set to true to check for collisions for their links -->
-  <arg name="electric_gripper" default="false"/>
+  <arg name="electric_gripper" default="true"/>
   <!-- Set the kinematic tip for the right_arm move_group -->
   <arg name="tip_name"     if="$(arg electric_gripper)" default="right_gripper"/>
   <arg name="tip_name" unless="$(arg electric_gripper)" default="right_hand"/>
@@ -162,7 +161,6 @@
     <param name="planning_scene_monitor/publish_state_updates" value="$(arg publish_monitored_planning_scene)" />
     <param name="planning_scene_monitor/publish_transforms_updates" value="$(arg publish_monitored_planning_scene)" />
   </node>
-
-<!--   <node name="planning_node" pkg="planning" type="planning_node.py" /> -->
+<node name="planning_node" pkg="planning" type="planning_node.py" />
 
 </launch>
