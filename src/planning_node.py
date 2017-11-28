@@ -32,6 +32,8 @@ right_arm = moveit_commander.MoveGroupCommander('right_arm')
 right_arm.set_planning_time(20)
 tfl = tf.TransformListener()
 
+should_print_pose = False
+
 def initialize_gripper():
     right_gripper.reboot()
     rospy.sleep(3.0)
@@ -50,7 +52,7 @@ def planning():
     def update_pose():
         global pose
         # .... some code here should take some time to let tfl updating its tf cache...
-        tf = tfl.lookupTransform("base", "right_gripper", rospy.Time(0))
+        tf = tfl.lookupTransform("base", "right_gripper",  rospy.Time(0))
         pose = Pose()
         pose.position.x = tf[0][0]
         pose.position.y = tf[0][1]
@@ -60,6 +62,9 @@ def planning():
         pose.orientation.y = tf[1][1]
         pose.orientation.z = tf[1][2]
         pose.orientation.w = tf[1][3]
+        if should_print_pose:
+            print "base -> right_gripper pose"
+            print str(pose)
 
     # rospy.Subscriber("mouth_pose", Pose, callback)
     # rospy.Subscriber("marshmallow_pose", Pose, callback)
@@ -131,13 +136,16 @@ def initialize():
     tf_listener = tf.TransformListener()
     while not rospy.is_shutdown():
         try:
-            (trans,rot) = tf_listener.lookupTransform('/color_tracker_8', '/base', rospy.Time(0))
+            (trans,rot) = tf_listener.lookupTransform('base', '/color_tracker_8', rospy.Time(0))
             ar_pose1 = Pose()
             ar_pose1.position.x = trans[0]
             ar_pose1.position.y = trans[1]
-            ar_pose1.position.z = trans[2]
-
-
+            ar_pose1.position.z = trans[2] + 0.2
+            # ar_pose1.position.x = 0.724255059309
+            # ar_pose1.position.y = -0.0343462275688
+            # ar_pose1.position.z =  0.13633742452
+# 
+# 
             ar_pose1.orientation = deepcopy(pose).orientation
             print "AR Pose 1"
             print str(ar_pose1)
@@ -147,13 +155,15 @@ def initialize():
             continue
     while not rospy.is_shutdown():
         try:
-            (trans,rot) = tf_listener.lookupTransform('/color_tracker_0', '/base', rospy.Time(0))
             ar_pose2 = Pose()
+            (trans,rot) = tf_listener.lookupTransform('base', '/color_tracker_0', rospy.Time(0))
             ar_pose2.position.x = trans[0]
             ar_pose2.position.y = trans[1]
-            ar_pose2.position.z = trans[2]
+            ar_pose2.position.z = trans[2] + 0.2
 
-
+            # ar_pose2.position.x = -0.15070808524
+            # ar_pose2.position.y = 0.724076150604
+            # ar_pose2.position.z = 0.119592545533
             ar_pose2.orientation = deepcopy(pose).orientation
             print "AR Pose 2"
             print str(ar_pose2)
@@ -162,32 +172,18 @@ def initialize():
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
             continue
     
-    # pose1 = deepcopy(pose)
-    # pose2 = deepcopy(pose)
-    # pose2.position.z += 0.4
-    # pose3 = deepcopy(pose)
-    # pose3.position.x += 0.2
-    # actions.append(Action(Action.MOVE, pose2))
-    # actions.append(Action(Action.FUNCTION, initialize_gripper))
-    # actions.append(Action(Action.MOVE, pose1))
-    # actions.append(Action(Action.GRIPPER, Action.CLOSE))
-    # actions.append(Action(Action.MOVE, pose2))
-    # actions.append(Action(Action.MOVE, pose3))
-    # actions.append(Action(Action.GRIPPER, Action.OPEN))
-    # actions.append(Action(Action.MOVE, pose2))
-    # actions.append(Action(Action.MOVE, pose1))
 
     mm_pose = ar_pose1
     start_pose = deepcopy(pose)
     mouth_pose = ar_pose2
-    actions.append(Action(Action.FUNCTION, initialize_gripper))
+    # actions.append(Action(Action.FUNCTION, initialize_gripper))
     actions.append(Action(Action.MOVE, mm_pose))
-    actions.append(Action(Action.GRIPPER, Action.CLOSE))
-    actions.append(Action(Action.MOVE, start_pose))
-    actions.append(Action(Action.MOVE, mouth_pose))
-    actions.append(Action(Action.GRIPPER, Action.OPEN))
-    actions.append(Action(Action.MOVE, start_pose))
-    actions.append(Action(Action.MOVE, mm_pose))
+    # actions.append(Action(Action.GRIPPER, Action.CLOSE))
+    # actions.append(Action(Action.MOVE, start_pose))
+    # actions.append(Action(Action.MOVE, mouth_pose))
+    # actions.append(Action(Action.GRIPPER, Action.OPEN))
+    # actions.append(Action(Action.MOVE, start_pose))
+    # actions.append(Action(Action.MOVE, mm_pose))
 
     
     wait_time = 2.0
@@ -196,7 +192,8 @@ def initialize():
 
     return actions
 
-def move(goal_pose, has_orientation_constraint=True):
+def move(goal_pose, has_orientation_constraint=False):
+
     right_arm.set_pose_target(goal_pose)
     right_arm.set_start_state_to_current_state()
 
@@ -215,10 +212,12 @@ def move(goal_pose, has_orientation_constraint=True):
 
     right_arm.set_goal_position_tolerance(0.01) 
     right_arm.set_num_planning_attempts(3) # take best of 3 for accuracy of 5 mm
-    # pdb.set_trace()
+    print pose
+
 
     right_plan = right_arm.plan()
-    raw_input("Enter anything to compute")
+    # raw_input("Enter anything to compute")
+    #import pdb; pdb.set_trace()
     right_arm.execute(right_plan)
     # plan,fraction = right_arm.compute_cartesian_path([],  0.01, 0.01)
     # print str(plan)
