@@ -126,6 +126,39 @@ def planning():
 
     # rospy.spin()
 
+def quat_to_euler(orientation):
+    quaternion = (
+        orientation.x,
+        orientation.y,
+        orientation.z,
+        orientation.w
+    )
+    euler = tf.transformations.euler_from_quaternion(quaternion)
+    roll = euler[0]
+    pitch = euler[1]
+    yaw = euler[2]
+    return (roll,pitch,yaw)
+
+def euler_to_quat(roll, pitch, yaw):
+    pose = Pose()
+    quaternion = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
+    #type(pose) = geometry_msgs.msg.Pose
+    pose.orientation.x = quaternion[0]
+    pose.orientation.y = quaternion[1]
+    pose.orientation.z = quaternion[2]
+    pose.orientation.w = quaternion[3]
+    return pose.orientation
+    
+
+"""
+flip by z axis, z axis corresponds by yaw
+"""
+def flip_quat(orientation):
+    r,p,y = quat_to_euler(orientation)
+    r += np.pi
+    return euler_to_quat(r,p,y)
+    
+
 def initialize():
     assert right_gripper.is_ready()
     right_gripper.open()
@@ -145,8 +178,11 @@ def initialize():
             # ar_pose1.position.y = -0.0343462275688
             # ar_pose1.position.z =  0.13633742452
 # 
+            
 # 
-            ar_pose1.orientation = deepcopy(pose).orientation
+            # ar_pose1.orientation = deepcopy(pose).orientation
+            ar_pose1.orientation = flip_quat(ar_pose1.orientation)
+
             print "AR Pose 1"
             print str(ar_pose1)
             # ar_pose1.orientation.x = rot[0] # ar_pose1.orientation.y = rot[1] # ar_pose1.orientation.z = rot[2] # ar_pose1.orientation.w = rot[3] print str(ar_pose1)
@@ -164,7 +200,8 @@ def initialize():
             # ar_pose2.position.x = -0.15070808524
             # ar_pose2.position.y = 0.724076150604
             # ar_pose2.position.z = 0.119592545533
-            ar_pose2.orientation = deepcopy(pose).orientation
+            # ar_pose2.orientation = deepcopy(pose).orientation
+            ar_pose1.orientation = flip_quat(ar_pose2.orientation)
             print "AR Pose 2"
             print str(ar_pose2)
             # ar_pose2.orientation.x = rot[0] # ar_pose2.orientation.y = rot[1] # ar_pose2.orientation.z = rot[2] # ar_pose2.orientation.w = rot[3]
