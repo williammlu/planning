@@ -9,6 +9,7 @@ from geometry_msgs.msg import PoseStamped
 from intera_core_msgs.msg import (
     EndpointState
 )
+from sensor_msgs.msg import Image, CompressedImage
 from moveit_msgs.msg import OrientationConstraint, Constraints
 
 from intera_interface import gripper as robot_gripper
@@ -38,6 +39,10 @@ rospy.init_node('camera_display', anonymous=True)
 def show_image_callback(img_data, (edge_detection, window_name)):
     """The callback function to show image by using CvBridge and cv
     """
+
+    if pub:
+        pub.publish(img_data)
+        
     bridge = CvBridge()
     try:
         cv_image = bridge.imgmsg_to_cv2(img_data, "bgr8")
@@ -93,6 +98,9 @@ def main():
     use_canny_edge = args.edge
     camera.set_callback(args.camera, show_image_callback,
         rectify_image=rectify_image, callback_args=(use_canny_edge, args.camera))
+
+    global pub
+    pub = rospy.Publisher('sawyer_cam', Image, queue_size=10)
 
     def clean_shutdown():
         print("Shutting down camera_display node.")

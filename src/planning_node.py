@@ -1,24 +1,21 @@
 #!/usr/bin/env python
 # license removed for brevity
 
-#from baxter_interface import gripper as robot_gripper
+from baxter_interface import gripper as robot_gripper
+from copy import deepcopy
 from geometry_msgs.msg import Point
 from geometry_msgs.msg import Pose
-from geometry_msgs.msg import Quaternion
 from geometry_msgs.msg import PoseStamped
-from intera_core_msgs.msg import (
-    EndpointState
-)
-from moveit_msgs.msg import OrientationConstraint, Constraints
-
+from geometry_msgs.msg import Quaternion
+from intera_core_msgs.msg import (EndpointState)
 from intera_interface import gripper as robot_gripper
+from moveit_msgs.msg import OrientationConstraint, Constraints
 from std_msgs.msg import String
 import moveit_commander
+import pdb
 import rospy
 import sys
-from copy import deepcopy
 import tf
-import pdb
 
 rospy.init_node('planning')
 pose = None
@@ -28,9 +25,11 @@ right_gripper = robot_gripper.Gripper('right')
 robot = moveit_commander.RobotCommander()
 scene = moveit_commander.PlanningSceneInterface()
 right_arm = moveit_commander.MoveGroupCommander('right_arm')
-right_arm.set_planner_id('RRTConnectkConfigDefault')
+# right_arm.set_planner_id('RRTConnectkConfigDefault')
 right_arm.set_planning_time(20)
 tfl = tf.TransformListener()
+
+should_print_pose = False
 
 def initialize_gripper():
     right_gripper.reboot()
@@ -45,13 +44,12 @@ def planning():
 
     rate = rospy.Rate(10) # 10hz
     def gripper_state_callback(message):
-        # print(message.pose)
         global pose
         pose = message.pose
     def update_pose():
         global pose
         # .... some code here should take some time to let tfl updating its tf cache...
-        tf = tfl.lookupTransform("base", "right_gripper", rospy.Time(0))
+        tf = tfl.lookupTransform("base", "right_gripper",  rospy.Time(0))
         pose = Pose()
         pose.position.x = tf[0][0]
         pose.position.y = tf[0][1]
@@ -61,6 +59,8 @@ def planning():
         pose.orientation.y = tf[1][1]
         pose.orientation.z = tf[1][2]
         pose.orientation.w = tf[1][3]
+        if should_print_pose:
+            print "base -> right_gripper pose\n" + str(pose)
 
     # rospy.Subscriber("mouth_pose", Pose, callback)
     # rospy.Subscriber("marshmallow_pose", Pose, callback)
@@ -68,91 +68,105 @@ def planning():
     global pose
 
     update_pose()
-    print pose
-    print("--------")
+    rospy.logdebug(str(pose))
+    rospy.logdebug("--------")
 
-    #pose = right_arm.get_current_pose().pose
-    #print pose
-    #print("--------")
-
-    #rospy.Subscriber("/robot/limb/right/endpoint_state", EndpointState, gripper_state_callback)
-    #rospy.sleep(1)
-    #print pose
-    #print("--------")
-    #pose += 5
-    # print pose
-    # import time
-    # time.sleep(1)
-    # print pose
-    # return
-    # pose_i, pose_g = initialize()
     actions = initialize()
-    # print("Pose I: {}".format(pose_i.position.z))
-    # print("Pose G: {}".format(pose_g.position.z))
-
     
     for action in actions:
         action.execute()
-    print "Action sequence finished"
+    rospy.logdebug( "Action sequence finished")
     return
             
      
 
+def quat_to_euler(orientation):
+    quaternion = (
+        orientation.x,
+        orientation.y,
+        orientation.z,
+        orientation.w
+    )
+    euler = tf.transformations.euler_from_quaternion(quaternion)
+    roll = euler[0]
+    pitch = euler[1]
+    yaw = euler[2]
+    return (roll,pitch,yaw)
 
-    # while True:
-        # update_pose()
-        # i = raw_input("Press enter to continue, type anything to exit")
-        # if len(i) > 0:
-            # right_gripper.open()
-            # rospy.signal_shutdown(".")
-            # exit()
-# 
-        # move(pose_i, has_orientation_constraint=True)
-        # update_pose()
-        # print("Current z {}".format(pose.position.z))
-        # print("Pose I: {}".format(pose_i.position.z))
-        # do_grip()
-        # move(pose_g, has_orientation_constraint=True)
-        # update_pose()
-        # print("Current z: {}".format(pose.position.z))
-        # print("Pose G: {}".format(pose_g.position.z))
+def euler_to_quat(roll, pitch, yaw):
+    pose = Pose()
+    quaternion = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
+    #type(pose) = geometry_msgs.msg.Pose
+    pose.orientation.x = quaternion[0]
+    pose.orientation.y = quaternion[1]
+    pose.orientation.z = quaternion[2]
+    pose.orientation.w = quaternion[3]
+    return pose.orientation
+    
 
-
-        # fixed pose things
-
-    # rospy.spin()
+"""
+Reverse direction z basis vector, z axis corresponds by yaw
+"""
+def flip_quat(orientation):
+    r,p,y = quat_to_euler(orientation)
+    r += np.pi
+    return euler_to_quat(r,p,y)
+    
 
 def initialize():
     assert right_gripper.is_ready()
     right_gripper.open()
     actions = []
-
-    pose1 = deepcopy(pose)
-    pose2 = deepcopy(pose)
-    pose2.position.z += 0.4
-    pose3 = deepcopy(pose)
-    pose3.position.x += 0.2
+    global pose
 
 
-    actions.append(Action(Action.MOVE, pose2))
-    actions.append(Action(Action.FUNCTION, initialize_gripper))
-    actions.append(Action(Action.MOVE, pose1))
-    actions.append(Action(Action.GRIPPER, Action.CLOSE))
-    actions.append(Action(Action.MOVE, pose2))
-    actions.append(Action(Action.MOVE, pose3))
-    actions.append(Action(Action.GRIPPER, Action.OPEN))
-    actions.append(Action(Action.MOVE, pose2))
-    actions.append(Action(Action.MOVE, pose1))
+    tf_listener = tf.TransformListener()
+    while not rospy.is_shutdown():
+        try:
+            (trans,rot) = tf_listener.lookupTransform('base', '/color_tracker_8', rospy.Time(0))
+            ar_pose1 = Pose()
+            ar_pose1.position.x = trans[0]
+            ar_pose1.position.y = trans[1]
+            ar_pose1.position.z = trans[2] + 0.2
+            ar_pose1.orientation = flip_quat(ar_pose1.orientation)
+            print "AR Pose 1 \n" + str(ar_pose1)
+            break
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+            continue
+    while not rospy.is_shutdown():
+        try:
+            ar_pose2 = Pose()
+            (trans,rot) = tf_listener.lookupTransform('base', '/color_tracker_0', rospy.Time(0))
+            ar_pose2.position.x = trans[0]
+            ar_pose2.position.y = trans[1]
+            ar_pose2.position.z = trans[2] + 0.2
+            ar_pose1.orientation = flip_quat(ar_pose2.orientation)
+            print "AR Pose 2 \n" + str(ar_pose2)
+            break
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+            continue
+    
+
+    mm_pose = ar_pose1
+    start_pose = deepcopy(pose)
+    mouth_pose = ar_pose2
+    # actions.append(Action(Action.FUNCTION, initialize_gripper))
+    actions.append(Action(Action.MOVE, mm_pose))
+    # actions.append(Action(Action.GRIPPER, Action.CLOSE))
+    # actions.append(Action(Action.MOVE, start_pose))
+    # actions.append(Action(Action.MOVE, mouth_pose))
+    # actions.append(Action(Action.GRIPPER, Action.OPEN))
+    # actions.append(Action(Action.MOVE, start_pose))
+    # actions.append(Action(Action.MOVE, mm_pose))
 
     
-    wait_time = 2.0
-    print('Finished initializing, wait {} seconds'.format(wait_time))
+    rospy.logdebug('Finished initializing, wait {} seconds'.format(2.0))
     rospy.sleep(wait_time)
-
     return actions
 
-def move(pose, has_orientation_constraint=True):
-    right_arm.set_pose_target(pose)
+def move(goal_pose, has_orientation_constraint=False):
+
+    right_arm.set_pose_target(goal_pose)
     right_arm.set_start_state_to_current_state()
 
     if (has_orientation_constraint):
@@ -168,10 +182,17 @@ def move(pose, has_orientation_constraint=True):
         consts.orientation_constraints = [orien_const]
         right_arm.set_path_constraints(consts)
 
-    right_arm.set_goal_position_tolerance(0.005) 
+    right_arm.set_goal_position_tolerance(0.01) 
     right_arm.set_num_planning_attempts(3) # take best of 3 for accuracy of 5 mm
+    print pose
+
+
     right_plan = right_arm.plan()
     right_arm.execute(right_plan)
+    # plan,fraction = right_arm.compute_cartesian_path([],  0.01, 0.01)
+    # print str(plan)
+    # print str(fraction)
+    # right_arm.execute(plan)
 
 
 
@@ -185,48 +206,14 @@ def do_grip():
     right_gripper.close()
     rospy.sleep(2.0)
 
-    # while True:
-    #     #c_pose = pose
-    #     #print("Current pose {}".format(pose))
-    #     #Close the right gripper
-    #     print('Closing...')
-    #     right_gripper.close()
-    #     rospy.sleep(1.0)
-    #     return True
-
-    #     print('Closed gripper')
-
-    #     print("Gripper has {}N force applied.".format(right_gripper.get_force()))
-
-    #     if True or right_gripper.is_gripping():
-    #         print("Gripper has gotten marshmallow on try {}".format(c))
-    #         # import pdb; pdb.set_trace()
-    #         return True
-    #     else:
-    #         print("Failed attempt {}, trying again".format(c))
-    #         
-
-    #     c = c+1
-    #     if c > MAX_TRIES:
-    #         print("Failed after {} tries, quitting...".format(MAX_TRIES))
-    #         right_gripper.open()
-    #         return False
-
-    #     # Open the right gripper
-    #     print('Opening...')
-    #     right_gripper.open()
-    #     rospy.sleep(1.0)
 
 class Action():
-    # def __init__(self, position, grip_action):
-        # self.position = position
-        # self.grip_action = grip_action # 1: grip, 0: nothing, -1: release
     GRIPPER=1
     MOVE=2
     FUNCTION=3
 
-    CLOSE = 1
-    OPEN = -1
+    CLOSE = 4
+    OPEN = 5
     def __init__(self, action_type, value):
         self.action_type = action_type
         self.value = value
@@ -234,20 +221,17 @@ class Action():
     def execute(self):
         if self.action_type == Action.GRIPPER:
             if self.value == Action.CLOSE:
-                print "CLOSING GRIPPER"
+                rospy.logdebug( "CLOSING GRIPPER")
                 do_grip()
             elif self.value == Action.OPEN:
-                print "OPENING GRIPPER"
+                rospy.logdebug( "OPENING GRIPPER")
                 right_gripper.open()
         elif self.action_type == Action.MOVE:
-            print "MOVING TO " + str(self.value)
+            rospy.logdebug( "MOVING TO " + str(self.value))
             move(self.value)
         elif self.action_type == Action.FUNCTION:
-            print "RUNNING CUSTOM FUNCTION"
+            rospy.logdebug( "RUNNING CUSTOM FUNCTION")
             self.value()
-
-
-
 
 
 if __name__ == '__main__':
