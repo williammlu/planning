@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+!/usr/bin/env python
 # license removed for brevity
 
 from baxter_interface import gripper as robot_gripper
@@ -28,6 +28,8 @@ right_arm = moveit_commander.MoveGroupCommander('right_arm')
 # right_arm.set_planner_id('RRTConnectkConfigDefault')
 right_arm.set_planning_time(20)
 tfl = tf.TransformListener()
+rev_finger_trans, rev_finger_rot = tfl.lookupTransform("right_gripper_tip", "right_gripper")
+rev_mouth_trans, rev_mouth_rot = tfl.lookupTransform("ideal_mouth_tf", "right_gripper")
 
 should_print_pose = False
 
@@ -49,7 +51,7 @@ def main():
     def update_pose():
         global pose
         # .... some code here should take some time to let tfl updating its tf cache...
-        tf = tfl.lookupTransform("base", "right_gripper_tip",  rospy.Time(0))
+        tf = tfl.lookupTransform("base", "right_gripper",  rospy.Time(0))
         pose = Pose()
         pose.position.x = tf[0][0]
         pose.position.y = tf[0][1]
@@ -74,6 +76,22 @@ def main():
     actions = initialize()
     execute_action_sequence(actions)
     return
+
+def combine_transforms(trans1, rot1, trans2, rot2):
+    trans1_mat = tf.transformations.translation_matrix(trans1)
+    rot1_mat   = tf.transformations.quaternion_matrix(rot1)
+    mat1 = numpy.dot(trans1_mat, rot1_mat)
+    
+    trans2_mat = tf.transformations.translation_matrix(trans2)
+    rot2_mat    = tf.transformations.quaternion_matrix(rot2)
+    mat2 = numpy.dot(trans2_mat, rot2_mat)
+
+    mat3 = numpy.dot(mat1, mat2)
+    trans3 = tf.transformations.translation_from_matrix(mat3)
+    rot3 = tf.transformations.quaternion_from_matrix(mat3)
+
+    return trans3, rot3
+
             
 def execute_action_sequence(actions):
     for action in actions:
@@ -127,12 +145,15 @@ def initialize():
     while not rospy.is_shutdown():
         try:
             (trans,rot) = tf_listener.lookupTransform('base', '/color_tracker_8', rospy.Time(0))
+
+            combo_trans, combo_rot = combine_transforms(trans, rot, rev_finger_trans, rev_finger_rot)
+            
             ar_pose1 = Pose()
-            ar_pose1.position.x = trans[0]
-            ar_pose1.position.y = trans[1]
-            ar_pose1.position.z = trans[2] + 0.2
-            ar_pose1.orientation = flip_quat(ar_pose1.orientation)
-            print "AR Pose 1 \n" + str(ar_pose1)
+            ar_pose1.position.x = combo_trans[0]
+            ar_pose1.position.y = combo_trans[1]
+            ar_pose1.position.z = combo_trans[2]
+            ar_pose1.orientation = flip_quat(ar_pose1.orientation) # make sure to use appropriate coordinates
+            print "Marshmallow Pose \n" + str(ar_pose1)
             break
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
             continue
@@ -140,11 +161,13 @@ def initialize():
         try:
             ar_pose2 = Pose()
             (trans,rot) = tf_listener.lookupTransform('base', '/color_tracker_0', rospy.Time(0))
-            ar_pose2.position.x = trans[0]
-            ar_pose2.position.y = trans[1]
-            ar_pose2.position.z = trans[2] + 0.2
-            ar_pose1.orientation = flip_quat(ar_pose2.orientation)
-            print "AR Pose 2 \n" + str(ar_pose2)
+            combo_trans, combo_rot= combine_transforms(trans,rot, rev_mouth_trans, rev_mouth_rot)
+
+            ar_pose2.position.x = combo_trans[0]
+            ar_pose2.position.y = combo_trans[1]
+            ar_pose2.position.z = combo_trans[2]
+            ar_pose1.orientation = flip_quat(ar_pose2.orientation) # TODO make sure you use real mouth orientations
+            print "Mouth pose \n" + str(ar_pose2)
             break
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
             continue

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # license removed for brevity
-from baxter_interface import gripper as robot_gripper
+from baxter_interface import gripper as robot_grippe
 from geometry_msgs.msg import Point
 from geometry_msgs.msg import Pose
 from geometry_msgs.msg import Quaternion
