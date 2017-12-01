@@ -1,23 +1,24 @@
-#!/usr/bin/env python
+!/usr/bin/env python
 # license removed for brevity
+
 from baxter_interface import gripper as robot_gripper
+from copy import deepcopy
 from geometry_msgs.msg import Point
 from geometry_msgs.msg import Pose
-from geometry_msgs.msg import Quaternion
 from geometry_msgs.msg import PoseStamped
-from intera_core_msgs.msg import (
-    EndpointState
-)
-from moveit_msgs.msg import OrientationConstraint, Constraints
-
+from geometry_msgs.msg import Quaternion
+from intera_core_msgs.msg import (EndpointState)
 from intera_interface import gripper as robot_gripper
+from moveit_msgs.msg import OrientationConstraint, Constraints
 from std_msgs.msg import String
+from planning.srv import *
+
+import numpy as np
 import moveit_commander
+import pdb
 import rospy
 import sys
-from copy import deepcopy
 import tf
-import pdb
 
 import sensor_msgs.point_cloud2 as pc2
 from sensor_msgs.msg import PointCloud2, PointField
@@ -27,31 +28,21 @@ pose = None
 moveit_commander.roscpp_initialize(sys.argv)
 
 right_gripper = robot_gripper.Gripper('right')
-# pdb.set_trace()
 robot = moveit_commander.RobotCommander()
 scene = moveit_commander.PlanningSceneInterface()
 right_arm = moveit_commander.MoveGroupCommander('right_arm')
 # right_arm.set_planner_id('RRTConnectkConfigDefault')
 right_arm.set_planning_time(20)
 tfl = tf.TransformListener()
+rev_finger_trans, rev_finger_rot = tfl.lookupTransform("right_gripper_tip", "right_gripper")
+rev_mouth_trans, rev_mouth_rot = tfl.lookupTransform("ideal_mouth_tf", "right_gripper")
 
 should_print_pose = False
 
-def initialize_gripper():
-    right_gripper.reboot()
-    rospy.sleep(3.0)
-    right_gripper.calibrate()
-    #right_gripper.set_holding_force(10)
-    rospy.sleep(3.0)
-    assert right_gripper.is_ready()
-
-def planning():
+def main():
     #Set up the right gripper
 
     rate = rospy.Rate(10) # 10hz
-    def gripper_state_callback(message):
-        global pose
-        pose = message.pose
     def update_pose():
         global pose
         # .... some code here should take some time to let tfl updating its tf cache...
@@ -66,8 +57,7 @@ def planning():
         pose.orientation.z = tf[1][2]
         pose.orientation.w = tf[1][3]
         if should_print_pose:
-            print "base -> right_gripper pose"
-            print str(pose)
+            print "base -> right_gripper tip pose\n" + str(pose)
 
     # rospy.Subscriber("mouth_pose", Pose, callback)
     # rospy.Subscriber("marshmallow_pose", Pose, callback)
@@ -78,57 +68,50 @@ def planning():
     rospy.logdebug(str(pose))
     rospy.logdebug("--------")
 
-    #pose = right_arm.get_current_pose().pose
-    #print pose
-    #print("--------")
-
-    #rospy.Subscriber("/robot/limb/right/endpoint_state", EndpointState, gripper_state_callback)
-    #rospy.sleep(1)
-    #print pose
-    #print("--------")
-    #pose += 5
-    # print pose
-    # import time
-    # time.sleep(1)
-    # print pose
+    # rospy.Subscriber("some_location_idk", PointCloud2, callback_kinect)
+    
+    # for action in actions:
+        # action.execute()
+    # rospy.logdebug( "Action sequence finished")
     # return
-    # pose_i, pose_g = initialize()
-    actions = initialize()
-    # print("Pose I: {}".format(pose_i.position.z))
-    # print("Pose G: {}".format(pose_g.position.z))
+            
+     
+    initialize()
+    move_to_marshmallow()
+
+    s = rospy.Service('move_robot', TriggerPhase, move_robot)
+    rospy.spin()
+
+def initialize_gripper():
+    right_gripper.reboot()
+    rospy.sleep(3.0)
+    right_gripper.calibrate()
+    #right_gripper.set_holding_force(10)
+    rospy.sleep(3.0)
+    assert right_gripper.is_ready()
+
+def combine_transforms(trans1, rot1, trans2, rot2):
+    trans1_mat = tf.transformations.translation_matrix(trans1)
+    rot1_mat   = tf.transformations.quaternion_matrix(rot1)
+    mat1 = numpy.dot(trans1_mat, rot1_mat)
     
-    rospy.Subscriber("some_location_idk", PointCloud2, callback_kinect)
-    
+    trans2_mat = tf.transformations.translation_matrix(trans2)
+    rot2_mat    = tf.transformations.quaternion_matrix(rot2)
+    mat2 = numpy.dot(trans2_mat, rot2_mat)
+
+    mat3 = numpy.dot(mat1, mat2)
+    trans3 = tf.transformations.translation_from_matrix(mat3)
+    rot3 = tf.transformations.quaternion_from_matrix(mat3)
+
+    return trans3, rot3
+
+            
+def execute_action_sequence(actions):
     for action in actions:
         action.execute()
     rospy.logdebug( "Action sequence finished")
-    return
-            
+    return 
      
-
-
-    # while True:
-        # update_pose()
-        # i = raw_input("Press enter to continue, type anything to exit")
-        # if len(i) > 0:
-            # right_gripper.open()
-            # rospy.signal_shutdown(".")
-            # exit()
-# 
-        # move(pose_i, has_orientation_constraint=True)
-        # update_pose()
-        # print("Current z {}".format(pose.position.z))
-        # print("Pose I: {}".format(pose_i.position.z))
-        # do_grip()
-        # move(pose_g, has_orientation_constraint=True)
-        # update_pose()
-        # print("Current z: {}".format(pose.position.z))
-        # print("Pose G: {}".format(pose_g.position.z))
-
-
-        # fixed pose things
-
-    # rospy.spin()
 
 def callback_kinect(data):
 
@@ -163,13 +146,57 @@ def euler_to_quat(roll, pitch, yaw):
     
 
 """
-flip by z axis, z axis corresponds by yaw
+Reverse direction z basis vector, z axis corresponds by yaw
 """
 def flip_quat(orientation):
     r,p,y = quat_to_euler(orientation)
     r += np.pi
     return euler_to_quat(r,p,y)
     
+def get_marshmallow_pose():
+    tf_listener = tf.TransformListener()
+    while not rospy.is_shutdown():
+    try:
+        (trans,rot) = tf_listener.lookupTransform('base', '/color_tracker_8', rospy.Time(0))
+
+        combo_trans, combo_rot = combine_transforms(trans, rot, rev_finger_trans, rev_finger_rot)
+        
+        way_point_pose = Pose()
+        way_point_pose.position.x = combo_trans[0]
+        way_point_pose.position.y = combo_trans[1]
+        way_point_pose.position.z = combo_trans[2] + 0.1
+        way_point_pose.orientation = flip_quat(ar_pose1.orientation) # make sure to use appropriate coordinates
+
+        marshmallow_pose = Pose()
+        marshmallow_pose.position.x = combo_trans[0]
+        marshmallow_pose.position.y = combo_trans[1]
+        marshmallow_pose.position.z = combo_trans[2]
+
+        way_point_pose = quaternion_from_euler(0,-np.pi/2)
+        marshmallow_pose = quaternion_from_euler(0,-np.pi/2) # points in positive z direction
+        print "Marshmallow Pose \n" + str(marshmallow_pose)
+        return way_point_pose, marshmallow_pose
+    except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+        continue
+
+
+def get_mouth_pose():
+    tf_listener = tf.TransformListener()
+    while not rospy.is_shutdown():
+    try:
+        mouth_pose = Pose()
+        (trans,rot) = tf_listener.lookupTransform('base', 'face', rospy.Time(0))
+        combo_trans, combo_rot= combine_transforms(trans,rot, rev_mouth_trans, rev_mouth_rot)
+
+        mouth_pose.position.x = combo_trans[0]
+        mouth_pose.position.y = combo_trans[1]
+        mouth_pose.position.z = combo_trans[2]
+        mouth_pose.orientation = mouth_pose.orientation # TODO make sure you use real mouth orientations aka flipped kinect quaternion
+        print "Mouth pose \n" + str(mouth_pose)
+        return mouth_pose
+    except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+        continue
+
 
 def initialize():
     assert right_gripper.is_ready()
@@ -229,8 +256,13 @@ def initialize():
     mm_pose = ar_pose1
     start_pose = deepcopy(pose)
     mouth_pose = ar_pose2
+    # ar_pose1 = get_marshmallow_pose()
+    # ar_pose2 = get_mouth_pose()
+    # mm_pose = ar_pose1
+    # start_pose = deepcopy(pose)
+    # mouth_pose = ar_pose2
     # actions.append(Action(Action.FUNCTION, initialize_gripper))
-    actions.append(Action(Action.MOVE, mm_pose))
+    # actions.append(Action(Action.MOVE, mm_pose))
     # actions.append(Action(Action.GRIPPER, Action.CLOSE))
     # actions.append(Action(Action.MOVE, start_pose))
     # actions.append(Action(Action.MOVE, mouth_pose))
@@ -239,13 +271,71 @@ def initialize():
     # actions.append(Action(Action.MOVE, mm_pose))
 
     
-    wait_time = 2.0
-    rospy.logdebug('Finished initializing, wait {} seconds'.format(wait_time))
+    rospy.logdebug('Finished initializing, wait {} seconds'.format(2.0))
     rospy.sleep(wait_time)
 
-    return actions
+def move_robot(request):
+    phase_id = request.phase
+    print "phase_id is %d"%phase_id
+    if phase_id == 0:
+        success =  move_to_marshmallow()
+    elif phase_id == 1:
+        success =  move_to_mouth()
+    elif phase_id == 2:
+        success =  grip_marshmallow()
+    elif phase_id == 3:
+        success =  release_marshmallow()
+    elif phase_id == 4:
+        success =  move_to_initial_state()
+    message = "placeholder"
 
-def move(goal_pose, has_orientation_constraint=False):
+    return TriggerPhaseResponse(success, message)
+
+
+def move_to_marshmallow():
+    way_point_pose, marshmallow_pose = get_marshmallow_pose()
+    actions = []
+
+    gripper_pose1 = Pose()
+    gripper_pose1.position = way_point_pose.position
+    gripper_pose1.orientation = flip_quat(way_point_pose.orientation)
+
+    gripper_pose2 = Pose()
+    gripper_pose2.position = marshmallow_pose.position
+    gripper_pose2.orientation = flip_quat(marshmallow_pose.orientation)
+
+
+    actions.append(Action(Action.GRIPPER, Action.OPEN))
+    actions.append(Action(Action.MOVE_PRECISE, gripper_pose1))
+    actions.append(Action(Action.MOVE, gripper_pose2))
+    execute_action_sequence(actions)
+    return True
+    
+def move_to_mouth():
+    mouth_pose = get_mouth_pose()
+    gripper_pose = Pose()
+    gripper_pose.position = mouth_pose.postion
+    gripper_pose.orientation = flip_quat(mouth_pose.orientation)
+
+    actions = []
+    actions.append(Action(Action.MOVE, gripper_pose))
+    execute_action_sequence(actions)
+    return True
+
+
+def grip_marshmallow():
+    actions = []
+    actions.append(Action(Action.GRIPPER, Action.CLOSE))
+    execute_action_sequence(actions)
+    return True
+    
+
+def move_to_initial_state():
+    # TODO
+    return  True
+
+
+def move(goal_pose, has_orientation_constraint=False, do_precise_movement=False):
 
     right_arm.set_pose_target(goal_pose)
     right_arm.set_start_state_to_current_state()
@@ -263,14 +353,17 @@ def move(goal_pose, has_orientation_constraint=False):
         consts.orientation_constraints = [orien_const]
         right_arm.set_path_constraints(consts)
 
-    right_arm.set_goal_position_tolerance(0.01) 
-    right_arm.set_num_planning_attempts(3) # take best of 3 for accuracy of 5 mm
+    if do_precise_movement:
+        right_arm.set_goal_position_tolerance(0.005) 
+        right_arm.set_max_velocity_scaling_factor(0.25) # make it slow
+        right_arm.set_num_planning_attempts(5) # take best of 5 for accuracy of 5mm
+    else:
+        right_arm.set_goal_position_tolerance(0.01) 
+        right_arm.set_num_planning_attempts(3) # take best of 3 for accuracy of 1 cm
     print pose
 
 
     right_plan = right_arm.plan()
-    # raw_input("Enter anything to compute")
-    #import pdb; pdb.set_trace()
     right_arm.execute(right_plan)
     # plan,fraction = right_arm.compute_cartesian_path([],  0.01, 0.01)
     # print str(plan)
@@ -289,48 +382,15 @@ def do_grip():
     right_gripper.close()
     rospy.sleep(2.0)
 
-    # while True:
-    #     #c_pose = pose
-    #     #print("Current pose {}".format(pose))
-    #     #Close the right gripper
-    #     print('Closing...')
-    #     right_gripper.close()
-    #     rospy.sleep(1.0)
-    #     return True
-
-    #     print('Closed gripper')
-
-    #     print("Gripper has {}N force applied.".format(right_gripper.get_force()))
-
-    #     if True or right_gripper.is_gripping():
-    #         print("Gripper has gotten marshmallow on try {}".format(c))
-    #         # import pdb; pdb.set_trace()
-    #         return True
-    #     else:
-    #         print("Failed attempt {}, trying again".format(c))
-    #         
-
-    #     c = c+1
-    #     if c > MAX_TRIES:
-    #         print("Failed after {} tries, quitting...".format(MAX_TRIES))
-    #         right_gripper.open()
-    #         return False
-
-    #     # Open the right gripper
-    #     print('Opening...')
-    #     right_gripper.open()
-    #     rospy.sleep(1.0)
 
 class Action():
-    # def __init__(self, position, grip_action):
-        # self.position = position
-        # self.grip_action = grip_action # 1: grip, 0: nothing, -1: release
     GRIPPER=1
     MOVE=2
     FUNCTION=3
+    MOVE_PRECISE = 4
 
-    CLOSE = 1
-    OPEN = -1
+    CLOSE = -1
+    OPEN = -2
     def __init__(self, action_type, value):
         self.action_type = action_type
         self.value = value
@@ -346,16 +406,16 @@ class Action():
         elif self.action_type == Action.MOVE:
             rospy.logdebug( "MOVING TO " + str(self.value))
             move(self.value)
+        elif self.action_type == Action.MOVE_PRECISE:
+            rospy.logdebug( "PRECISE MOVEMENT TO " + str(self.value))
+
         elif self.action_type == Action.FUNCTION:
             rospy.logdebug( "RUNNING CUSTOM FUNCTION")
             self.value()
 
 
-
-
-
 if __name__ == '__main__':
     try:
-        planning()
+        main()
     except rospy.ROSInterruptException:
         pass
