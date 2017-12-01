@@ -73,8 +73,9 @@ def main():
     rospy.logdebug(str(pose))
     rospy.logdebug("--------")
 
-    actions = initialize()
-    execute_action_sequence(actions)
+    initialize()
+    # execute_action_sequence(actions)
+    move_to_marshmallow()
     return
 
 def combine_transforms(trans1, rot1, trans2, rot2):
@@ -133,6 +134,40 @@ def flip_quat(orientation):
     r += np.pi
     return euler_to_quat(r,p,y)
     
+def get_marshmallow_pose():
+    tf_listener = tf.TransformListener()
+    while not rospy.is_shutdown():
+    try:
+        (trans,rot) = tf_listener.lookupTransform('base', '/color_tracker_8', rospy.Time(0))
+
+        combo_trans, combo_rot = combine_transforms(trans, rot, rev_finger_trans, rev_finger_rot)
+        
+        ar_pose1 = Pose()
+        ar_pose1.position.x = combo_trans[0]
+        ar_pose1.position.y = combo_trans[1]
+        ar_pose1.position.z = combo_trans[2]
+        ar_pose1.orientation = flip_quat(ar_pose1.orientation) # make sure to use appropriate coordinates
+        print "Marshmallow Pose \n" + str(ar_pose1)
+        return ar_pose1
+    except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+        continue
+def get_mouth_pose():
+    tf_listener = tf.TransformListener()
+    while not rospy.is_shutdown():
+    try:
+        ar_pose2 = Pose()
+        (trans,rot) = tf_listener.lookupTransform('base', '/color_tracker_0', rospy.Time(0))
+        combo_trans, combo_rot= combine_transforms(trans,rot, rev_mouth_trans, rev_mouth_rot)
+
+        ar_pose2.position.x = combo_trans[0]
+        ar_pose2.position.y = combo_trans[1]
+        ar_pose2.position.z = combo_trans[2]
+        ar_pose2.orientation = flip_quat(ar_pose2.orientation) # TODO make sure you use real mouth orientations
+        print "Mouth pose \n" + str(ar_pose2)
+        return ar_pose2
+    except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+        continue
+
 
 def initialize():
     assert right_gripper.is_ready()
@@ -141,43 +176,13 @@ def initialize():
     global pose
 
 
-    tf_listener = tf.TransformListener()
-    while not rospy.is_shutdown():
-        try:
-            (trans,rot) = tf_listener.lookupTransform('base', '/color_tracker_8', rospy.Time(0))
-
-            combo_trans, combo_rot = combine_transforms(trans, rot, rev_finger_trans, rev_finger_rot)
-            
-            ar_pose1 = Pose()
-            ar_pose1.position.x = combo_trans[0]
-            ar_pose1.position.y = combo_trans[1]
-            ar_pose1.position.z = combo_trans[2]
-            ar_pose1.orientation = flip_quat(ar_pose1.orientation) # make sure to use appropriate coordinates
-            print "Marshmallow Pose \n" + str(ar_pose1)
-            break
-        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
-            continue
-    while not rospy.is_shutdown():
-        try:
-            ar_pose2 = Pose()
-            (trans,rot) = tf_listener.lookupTransform('base', '/color_tracker_0', rospy.Time(0))
-            combo_trans, combo_rot= combine_transforms(trans,rot, rev_mouth_trans, rev_mouth_rot)
-
-            ar_pose2.position.x = combo_trans[0]
-            ar_pose2.position.y = combo_trans[1]
-            ar_pose2.position.z = combo_trans[2]
-            ar_pose1.orientation = flip_quat(ar_pose2.orientation) # TODO make sure you use real mouth orientations
-            print "Mouth pose \n" + str(ar_pose2)
-            break
-        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
-            continue
-    
-
-    mm_pose = ar_pose1
-    start_pose = deepcopy(pose)
-    mouth_pose = ar_pose2
+    # ar_pose1 = get_marshmallow_pose()
+    # ar_pose2 = get_mouth_pose()
+    # mm_pose = ar_pose1
+    # start_pose = deepcopy(pose)
+    # mouth_pose = ar_pose2
     # actions.append(Action(Action.FUNCTION, initialize_gripper))
-    actions.append(Action(Action.MOVE, mm_pose))
+    # actions.append(Action(Action.MOVE, mm_pose))
     # actions.append(Action(Action.GRIPPER, Action.CLOSE))
     # actions.append(Action(Action.MOVE, start_pose))
     # actions.append(Action(Action.MOVE, mouth_pose))
@@ -191,20 +196,30 @@ def initialize():
     return actions
 
 def move_to_marshmallow():
-    tf_listener = tf.TransformListener()
-    while not rospy.is_shutdown():
-        try: # TODO: change to marshmallow tf, get from Brent
-            (trans,rot) = tf_listener.lookupTransform('base', '/color_tracker_8', rospy.Time(0))
-            ar_pose1 = Pose()
-            ar_pose1.position.x = trans[0]
-            ar_pose1.position.y = trans[1]
-            ar_pose1.position.z = trans[2] + 0.2
-            ar_pose1.orientation = flip_quat(ar_pose1.orientation)
-            print "AR Pose 1 \n" + str(ar_pose1)
-            break
-        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
-            continue
+    marshmallow_pose = get_marshmallow_pose()
+    actions = []
+    actions.append(Action(Action.GRIPPER, Action.OPEN))
+    actions.append(Action(Action.MOVE, marshmallow_pose))
+    execute_action_sequence(actions)
+    return
+    
+def move_to_mouth():
+    mouth_pose = get_mouth_pose()
+    actions = []
+    actions.append(Action(Action.MOVE, mouth_pose))
+    execute_action_sequence(actions)
+    return
 
+def grip_marshmallow():
+    actions = []
+    actions.append(Action(Action.GRIPPER, Action.CLOSE))
+    execute_action_sequence(actions)
+    return
+    
+
+def move_to_initial_state():
+    # TODO
+    return 
 
 
 def move(goal_pose, has_orientation_constraint=False):
