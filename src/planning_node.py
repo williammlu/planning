@@ -143,13 +143,21 @@ def get_marshmallow_pose():
 
         combo_trans, combo_rot = combine_transforms(trans, rot, rev_finger_trans, rev_finger_rot)
         
-        ar_pose1 = Pose()
-        ar_pose1.position.x = combo_trans[0]
-        ar_pose1.position.y = combo_trans[1]
-        ar_pose1.position.z = combo_trans[2]
-        ar_pose1.orientation = flip_quat(ar_pose1.orientation) # make sure to use appropriate coordinates
-        print "Marshmallow Pose \n" + str(ar_pose1)
-        return ar_pose1
+        way_point_pose = Pose()
+        way_point_pose.position.x = combo_trans[0]
+        way_point_pose.position.y = combo_trans[1]
+        way_point_pose.position.z = combo_trans[2] + 0.1
+        way_point_pose.orientation = flip_quat(ar_pose1.orientation) # make sure to use appropriate coordinates
+
+        marshmallow_pose = Pose()
+        marshmallow_pose.position.x = combo_trans[0]
+        marshmallow_pose.position.y = combo_trans[1]
+        marshmallow_pose.position.z = combo_trans[2]
+
+        way_point_pose = quaternion_from_euler(0,-np.pi/2)
+        marshmallow_pose = quaternion_from_euler(0,-np.pi/2) # points in positive z direction
+        print "Marshmallow Pose \n" + str(marshmallow_pose)
+        return way_point_pose, marshmallow_pose
     except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
         continue
 
@@ -158,16 +166,16 @@ def get_mouth_pose():
     tf_listener = tf.TransformListener()
     while not rospy.is_shutdown():
     try:
-        ar_pose2 = Pose()
+        mouth_pose = Pose()
         (trans,rot) = tf_listener.lookupTransform('base', '/color_tracker_0', rospy.Time(0))
         combo_trans, combo_rot= combine_transforms(trans,rot, rev_mouth_trans, rev_mouth_rot)
 
-        ar_pose2.position.x = combo_trans[0]
-        ar_pose2.position.y = combo_trans[1]
-        ar_pose2.position.z = combo_trans[2]
-        ar_pose2.orientation = flip_quat(ar_pose2.orientation) # TODO make sure you use real mouth orientations
-        print "Mouth pose \n" + str(ar_pose2)
-        return ar_pose2
+        mouth_pose.position.x = combo_trans[0]
+        mouth_pose.position.y = combo_trans[1]
+        mouth_pose.position.z = combo_trans[2]
+        mouth_pose.orientation = mouth_pose.orientation # TODO make sure you use real mouth orientations aka flipped kinect quaternion
+        print "Mouth pose \n" + str(mouth_pose)
+        return mouth_pose
     except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
         continue
 
@@ -216,33 +224,49 @@ def move_robot(request):
 
 
 def move_to_marshmallow():
-    marshmallow_pose = get_marshmallow_pose()
+    way_point_pose, marshmallow_pose = get_marshmallow_pose()
     actions = []
+
+    gripper_pose1 = Pose()
+    gripper_pose1.position = way_point_pose.position
+    gripper_pose1.orientation = flip_quat(way_point_pose.orientation)
+
+    gripper_pose2 = Pose()
+    gripper_pose2.position = marshmallow_pose.position
+    gripper_pose2.orientation = flip_quat(marshmallow_pose.orientation)
+
+
     actions.append(Action(Action.GRIPPER, Action.OPEN))
-    actions.append(Action(Action.MOVE, marshmallow_pose))
+    actions.append(Action(Action.MOVE_PRECISE, gripper_pose1))
+    actions.append(Action(Action.MOVE, gripper_pose2))
     execute_action_sequence(actions)
-    return
+    return True
     
 def move_to_mouth():
     mouth_pose = get_mouth_pose()
+    gripper_pose = Pose()
+    gripper_pose.position = mouth_pose.postion
+    gripper_pose.orientation = flip_quat(mouth_pose.orientation)
+
     actions = []
-    actions.append(Action(Action.MOVE, mouth_pose))
+    actions.append(Action(Action.MOVE, gripper_pose))
     execute_action_sequence(actions)
-    return
+    return True
+
 
 def grip_marshmallow():
     actions = []
     actions.append(Action(Action.GRIPPER, Action.CLOSE))
     execute_action_sequence(actions)
-    return
+    return True
     
 
 def move_to_initial_state():
     # TODO
-    return 
+    return  True
 
 
-def move(goal_pose, has_orientation_constraint=False):
+def move(goal_pose, has_orientation_constraint=False, do_precise_movement=False):
 
     right_arm.set_pose_target(goal_pose)
     right_arm.set_start_state_to_current_state()
@@ -260,8 +284,13 @@ def move(goal_pose, has_orientation_constraint=False):
         consts.orientation_constraints = [orien_const]
         right_arm.set_path_constraints(consts)
 
-    right_arm.set_goal_position_tolerance(0.01) 
-    right_arm.set_num_planning_attempts(3) # take best of 3 for accuracy of 5 mm
+    if do_precise_movement:
+        right_arm.set_goal_position_tolerance(0.005) 
+        right_arm.set_max_velocity_scaling_factor(0.25) # make it slow
+        right_arm.set_num_planning_attempts(5) # take best of 5 for accuracy of 5mm
+    else:
+        right_arm.set_goal_position_tolerance(0.01) 
+        right_arm.set_num_planning_attempts(3) # take best of 3 for accuracy of 1 cm
     print pose
 
 
@@ -289,9 +318,10 @@ class Action():
     GRIPPER=1
     MOVE=2
     FUNCTION=3
+    MOVE_PRECISE = 4
 
-    CLOSE = 4
-    OPEN = 5
+    CLOSE = -1
+    OPEN = -2
     def __init__(self, action_type, value):
         self.action_type = action_type
         self.value = value
@@ -307,6 +337,9 @@ class Action():
         elif self.action_type == Action.MOVE:
             rospy.logdebug( "MOVING TO " + str(self.value))
             move(self.value)
+        elif self.action_type == Action.MOVE_PRECISE:
+            rospy.logdebug( "PRECISE MOVEMENT TO " + str(self.value))
+
         elif self.action_type == Action.FUNCTION:
             rospy.logdebug( "RUNNING CUSTOM FUNCTION")
             self.value()
