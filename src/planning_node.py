@@ -39,7 +39,7 @@ def initialize_gripper():
     rospy.sleep(3.0)
     assert right_gripper.is_ready()
 
-def planning():
+def main():
     #Set up the right gripper
 
     rate = rospy.Rate(10) # 10hz
@@ -49,7 +49,7 @@ def planning():
     def update_pose():
         global pose
         # .... some code here should take some time to let tfl updating its tf cache...
-        tf = tfl.lookupTransform("base", "right_gripper",  rospy.Time(0))
+        tf = tfl.lookupTransform("base", "right_gripper_tip",  rospy.Time(0))
         pose = Pose()
         pose.position.x = tf[0][0]
         pose.position.y = tf[0][1]
@@ -60,7 +60,7 @@ def planning():
         pose.orientation.z = tf[1][2]
         pose.orientation.w = tf[1][3]
         if should_print_pose:
-            print "base -> right_gripper pose\n" + str(pose)
+            print "base -> right_gripper tip pose\n" + str(pose)
 
     # rospy.Subscriber("mouth_pose", Pose, callback)
     # rospy.Subscriber("marshmallow_pose", Pose, callback)
@@ -72,12 +72,15 @@ def planning():
     rospy.logdebug("--------")
 
     actions = initialize()
-    
+    execute_action_sequence(actions)
+    return
+            
+def execute_action_sequence(actions):
     for action in actions:
         action.execute()
     rospy.logdebug( "Action sequence finished")
-    return
-            
+    return 
+
      
 
 def quat_to_euler(orientation):
@@ -164,6 +167,23 @@ def initialize():
     rospy.sleep(wait_time)
     return actions
 
+def move_to_marshmallow():
+    tf_listener = tf.TransformListener()
+    while not rospy.is_shutdown():
+        try: # TODO: change to marshmallow tf, get from Brent
+            (trans,rot) = tf_listener.lookupTransform('base', '/color_tracker_8', rospy.Time(0))
+            ar_pose1 = Pose()
+            ar_pose1.position.x = trans[0]
+            ar_pose1.position.y = trans[1]
+            ar_pose1.position.z = trans[2] + 0.2
+            ar_pose1.orientation = flip_quat(ar_pose1.orientation)
+            print "AR Pose 1 \n" + str(ar_pose1)
+            break
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+            continue
+
+
+
 def move(goal_pose, has_orientation_constraint=False):
 
     right_arm.set_pose_target(goal_pose)
@@ -236,6 +256,6 @@ class Action():
 
 if __name__ == '__main__':
     try:
-        planning()
+        main()
     except rospy.ROSInterruptException:
         pass
