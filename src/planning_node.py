@@ -132,11 +132,10 @@ def planning():
 
 def callback_kinect(data):
 
-    gen = pc2.read_points(data, skip_nans=True, field_names=("x", "y", "z"))  
     count = 0
     for p in pc2.read_points(data, field_names = ("x", "y", "z"), skip_nans=True):
         print("x : %f y : %f z: %f" % (p[0],p[1],p[2]))
-        scene.addCube("cube"+str(count), 1,p[0],p[1],p[2]) 
+        scene.addCube("cube"+str(count), 0.01 ,p[0],p[1],p[2]) #create small cube constraint at each point 
     
 
 def quat_to_euler(orientation):
