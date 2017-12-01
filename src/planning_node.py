@@ -71,7 +71,6 @@ def main():
     s = rospy.Service('move_robot', TriggerPhase, move_robot)
     rospy.spin()
 
-
 def initialize_gripper():
     right_gripper.reboot()
     rospy.sleep(3.0)
@@ -167,7 +166,7 @@ def get_mouth_pose():
     while not rospy.is_shutdown():
     try:
         mouth_pose = Pose()
-        (trans,rot) = tf_listener.lookupTransform('base', '/color_tracker_0', rospy.Time(0))
+        (trans,rot) = tf_listener.lookupTransform('base', 'face', rospy.Time(0))
         combo_trans, combo_rot= combine_transforms(trans,rot, rev_mouth_trans, rev_mouth_rot)
 
         mouth_pose.position.x = combo_trans[0]
