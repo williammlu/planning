@@ -1,32 +1,23 @@
-!/usr/bin/env python
-# license removed for brevity
+# !/usr/bin/env python
 
-from baxter_interface import gripper as robot_gripper
+import pdb
+
 from copy import deepcopy
-from geometry_msgs.msg import Point
-from geometry_msgs.msg import Pose
-from geometry_msgs.msg import PoseStamped
-from geometry_msgs.msg import Quaternion
-from intera_core_msgs.msg import (EndpointState)
+from geometry_msgs.msg import Point, Pose, PoseStamped, Quaternion
 from intera_interface import gripper as robot_gripper
 from moveit_msgs.msg import OrientationConstraint, Constraints
-from std_msgs.msg import String
-from planning.srv import *
+
+# from planning.srv import TriggerPhase
 
 import numpy as np
 import moveit_commander
-import pdb
 import rospy
 import sys
 import tf
 
-import sensor_msgs.point_cloud2 as pc2
-from sensor_msgs.msg import PointCloud2, PointField
-
-rospy.init_node('planning')
 pose = None
+rospy.init_node('planning')
 moveit_commander.roscpp_initialize(sys.argv)
-
 right_gripper = robot_gripper.Gripper('right')
 robot = moveit_commander.RobotCommander()
 scene = moveit_commander.PlanningSceneInterface()
@@ -34,10 +25,8 @@ right_arm = moveit_commander.MoveGroupCommander('right_arm')
 # right_arm.set_planner_id('RRTConnectkConfigDefault')
 right_arm.set_planning_time(20)
 tfl = tf.TransformListener()
-rev_finger_trans, rev_finger_rot = tfl.lookupTransform("right_gripper_tip", "right_gripper")
-rev_mouth_trans, rev_mouth_rot = tfl.lookupTransform("ideal_mouth_tf", "right_gripper")
-
 should_print_pose = False
+
 
 def main():
     #Set up the right gripper
@@ -77,9 +66,16 @@ def main():
             
      
     initialize()
-    move_to_marshmallow()
+    
 
-    s = rospy.Service('move_robot', TriggerPhase, move_robot)
+    # s = rospy.Service('move_robot', TriggerPhase, move_robot)
+    print "Launching service"
+    while True:
+        if raw_input("Type anything"):
+            move_to_marshmallow()
+        else:
+            break
+
     rospy.spin()
 
 def initialize_gripper():
@@ -93,14 +89,15 @@ def initialize_gripper():
 def combine_transforms(trans1, rot1, trans2, rot2):
     trans1_mat = tf.transformations.translation_matrix(trans1)
     rot1_mat   = tf.transformations.quaternion_matrix(rot1)
-    mat1 = numpy.dot(trans1_mat, rot1_mat)
+    mat1 = np.dot(trans1_mat, rot1_mat)
     
     trans2_mat = tf.transformations.translation_matrix(trans2)
     rot2_mat    = tf.transformations.quaternion_matrix(rot2)
-    mat2 = numpy.dot(trans2_mat, rot2_mat)
+    mat2 = np.dot(trans2_mat, rot2_mat)
 
-    mat3 = numpy.dot(mat1, mat2)
-    trans3 = tf.transformations.translation_from_matrix(mat3)
+    mat3 = np.dot(mat1, mat2)
+    pdb.set_trace()
+    trans3 = tf.transformations.translation_from_matrix(mat3)   
     rot3 = tf.transformations.quaternion_from_matrix(mat3)
 
     return trans3, rot3
@@ -112,13 +109,13 @@ def execute_action_sequence(actions):
     rospy.logdebug( "Action sequence finished")
     return 
      
-
-def callback_kinect(data):
-
-    count = 0
-    for p in pc2.read_points(data, field_names = ("x", "y", "z"), skip_nans=True):
-        print("x : %f y : %f z: %f" % (p[0],p[1],p[2]))
-        scene.addCube("cube"+str(count), 0.01 ,p[0],p[1],p[2]) #create small cube constraint at each point 
+# 
+# def callback_kinect(data):
+# 
+    # count = 0
+    # for p in pc2.read_points(data, field_names = ("x", "y", "z"), skip_nans=True):
+        # print("x : %f y : %f z: %f" % (p[0],p[1],p[2]))
+        # scene.addCube("cube"+str(count), 0.01 ,p[0],p[1],p[2]) #create small cube constraint at each point 
     
 
 def quat_to_euler(orientation):
@@ -153,130 +150,75 @@ def flip_quat(orientation):
     r += np.pi
     return euler_to_quat(r,p,y)
     
+
+def give_orientation(pose, orr_array):
+    pose.orientation.x = orr_array[0]
+    pose.orientation.y = orr_array[1]
+    pose.orientation.z = orr_array[2]
+    pose.orientation.w = orr_array[3]
 def get_marshmallow_pose():
     tf_listener = tf.TransformListener()
     while not rospy.is_shutdown():
-    try:
-        (trans,rot) = tf_listener.lookupTransform('base', '/color_tracker_8', rospy.Time(0))
+        try:
+            (trans,rot) = tf_listener.lookupTransform('base', 'marshmellow_0', rospy.Time(0))
+            rev_finger_trans, rev_finger_rot = tfl.lookupTransform("right_gripper", "right_gripper_tip", rospy.Time(0))
 
-        combo_trans, combo_rot = combine_transforms(trans, rot, rev_finger_trans, rev_finger_rot)
-        
-        way_point_pose = Pose()
-        way_point_pose.position.x = combo_trans[0]
-        way_point_pose.position.y = combo_trans[1]
-        way_point_pose.position.z = combo_trans[2] + 0.1
-        way_point_pose.orientation = flip_quat(ar_pose1.orientation) # make sure to use appropriate coordinates
+            combo_trans, combo_rot = combine_transforms(trans, rot, rev_finger_trans, rev_finger_rot)
+            
+            way_point_pose = Pose()
+            way_point_pose.position.x = combo_trans[0]
+            way_point_pose.position.y = combo_trans[1]
+            way_point_pose.position.z = combo_trans[2] + 0.2
+            way_point_pose.orientation = flip_quat(way_point_pose.orientation) # make sure to use appropriate coordinates
 
-        marshmallow_pose = Pose()
-        marshmallow_pose.position.x = combo_trans[0]
-        marshmallow_pose.position.y = combo_trans[1]
-        marshmallow_pose.position.z = combo_trans[2]
+            marshmallow_pose = Pose()
+            marshmallow_pose.position.x = combo_trans[0]
+            marshmallow_pose.position.y = combo_trans[1]
+            marshmallow_pose.position.z = combo_trans[2]
 
-        way_point_pose = quaternion_from_euler(0,-np.pi/2)
-        marshmallow_pose = quaternion_from_euler(0,-np.pi/2) # points in positive z direction
-        print "Marshmallow Pose \n" + str(marshmallow_pose)
-        return way_point_pose, marshmallow_pose
-    except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
-        continue
+            vertical_dir= tf.transformations.quaternion_from_euler(0,0,-np.pi/2) # points in positive z direction
+
+            give_orientation(way_point_pose, vertical_dir)
+            give_orientation(marshmallow_pose, vertical_dir)
+            
+
+            print "Marshmallow Pose \n" + str(marshmallow_pose)
+            return way_point_pose, marshmallow_pose
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+            continue
 
 
 def get_mouth_pose():
     tf_listener = tf.TransformListener()
     while not rospy.is_shutdown():
-    try:
-        mouth_pose = Pose()
-        (trans,rot) = tf_listener.lookupTransform('base', 'face', rospy.Time(0))
-        combo_trans, combo_rot= combine_transforms(trans,rot, rev_mouth_trans, rev_mouth_rot)
+        try:
+            mouth_pose = Pose()
+            (trans,rot) = tf_listener.lookupTransform('base', 'face', rospy.Time(0))
+            rev_mouth_trans, rev_mouth_rot = tfl.lookupTransform("right_gripper","ideal_mouth_tf", rospy.Time(0))
 
-        mouth_pose.position.x = combo_trans[0]
-        mouth_pose.position.y = combo_trans[1]
-        mouth_pose.position.z = combo_trans[2]
-        mouth_pose.orientation = mouth_pose.orientation # TODO make sure you use real mouth orientations aka flipped kinect quaternion
-        print "Mouth pose \n" + str(mouth_pose)
-        return mouth_pose
-    except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
-        continue
+            combo_trans, combo_rot= combine_transforms(trans,rot, rev_mouth_trans, rev_mouth_rot)
+
+            mouth_pose.position.x = combo_trans[0]
+            mouth_pose.position.y = combo_trans[1]
+            mouth_pose.position.z = combo_trans[2]
+            mouth_pose.orientation = mouth_pose.orientation # TODO make sure you use real mouth orientations aka flipped kinect quaternion
+            print "Mouth pose \n" + str(mouth_pose)
+            return mouth_pose
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+            continue
 
 
 def initialize():
     assert right_gripper.is_ready()
     right_gripper.open()
     actions = []
-    global pose
 
-
-    tf_listener = tf.TransformListener()
-    while not rospy.is_shutdown():
-        try:
-            (trans,rot) = tf_listener.lookupTransform('base', '/color_tracker_8', rospy.Time(0))
-            ar_pose1 = Pose()
-            ar_pose1.position.x = trans[0]
-            ar_pose1.position.y = trans[1]
-            ar_pose1.position.z = trans[2] + 0.2
-            # ar_pose1.position.x = 0.724255059309
-            # ar_pose1.position.y = -0.0343462275688
-            # ar_pose1.position.z =  0.13633742452
-# 
-            
-# 
-            # ar_pose1.orientation = deepcopy(pose).orientation
-            ar_pose1.orientation = flip_quat(ar_pose1.orientation)
-
-            print "AR Pose 1"
-            print str(ar_pose1)
-            # ar_pose1.orientation.x = rot[0] # ar_pose1.orientation.y = rot[1] # ar_pose1.orientation.z = rot[2] # ar_pose1.orientation.w = rot[3] print str(ar_pose1)
-            break
-        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
-            continue
-    while not rospy.is_shutdown():
-        try:
-            ar_pose2 = Pose()
-            (trans,rot) = tf_listener.lookupTransform('base', '/color_tracker_0', rospy.Time(0))
-            ar_pose2.position.x = trans[0]
-            ar_pose2.position.y = trans[1]
-            ar_pose2.position.z = trans[2] + 0.2
-
-            # ar_pose2.position.x = -0.15070808524
-            # ar_pose2.position.y = 0.724076150604
-            # ar_pose2.position.z = 0.119592545533
-            # ar_pose2.orientation = deepcopy(pose).orientation
-            ar_pose1.orientation = flip_quat(ar_pose2.orientation)
-            print "AR Pose 2"
-            print str(ar_pose2)
-            # ar_pose2.orientation.x = rot[0] # ar_pose2.orientation.y = rot[1] # ar_pose2.orientation.z = rot[2] # ar_pose2.orientation.w = rot[3]
-            break
-        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
-            continue
-    
-    #testing planning scene constarints
-    scene.addBox("box1", 1,2,1,1,1,1) 
-    scene.addCube("cube1", 0.5,) 
-
-
-    mm_pose = ar_pose1
-    start_pose = deepcopy(pose)
-    mouth_pose = ar_pose2
-    # ar_pose1 = get_marshmallow_pose()
-    # ar_pose2 = get_mouth_pose()
-    # mm_pose = ar_pose1
-    # start_pose = deepcopy(pose)
-    # mouth_pose = ar_pose2
-    # actions.append(Action(Action.FUNCTION, initialize_gripper))
-    # actions.append(Action(Action.MOVE, mm_pose))
-    # actions.append(Action(Action.GRIPPER, Action.CLOSE))
-    # actions.append(Action(Action.MOVE, start_pose))
-    # actions.append(Action(Action.MOVE, mouth_pose))
-    # actions.append(Action(Action.GRIPPER, Action.OPEN))
-    # actions.append(Action(Action.MOVE, start_pose))
-    # actions.append(Action(Action.MOVE, mm_pose))
-
-    
-    rospy.logdebug('Finished initializing, wait {} seconds'.format(2.0))
-    rospy.sleep(wait_time)
+    # rospy.logdebug('Finished initializing, wait {} seconds'.format(2.0))
+    rospy.sleep(2.0)
 
 def move_robot(request):
     phase_id = request.phase
-    print "phase_id is %d"%phase_id
+    print "phase_id is {}".format(phase_id)
     if phase_id == 0:
         success =  move_to_marshmallow()
     elif phase_id == 1:
@@ -315,7 +257,7 @@ def move_to_mouth():
     mouth_pose = get_mouth_pose()
     gripper_pose = Pose()
     gripper_pose.position = mouth_pose.postion
-    gripper_pose.orientation = flip_quat(mouth_pose.orientation)
+    gripper_pose.orientation = mouth_pose.orientation # don't flip since z goes into mouth
 
     actions = []
     actions.append(Action(Action.MOVE, gripper_pose))
@@ -365,10 +307,6 @@ def move(goal_pose, has_orientation_constraint=False, do_precise_movement=False)
 
     right_plan = right_arm.plan()
     right_arm.execute(right_plan)
-    # plan,fraction = right_arm.compute_cartesian_path([],  0.01, 0.01)
-    # print str(plan)
-    # print str(fraction)
-    # right_arm.execute(plan)
 
 
 

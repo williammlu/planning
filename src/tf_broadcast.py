@@ -27,15 +27,15 @@ def main():
     rate = rospy.Rate(10.0)
     while not rospy.is_shutdown():
         br.sendTransform((0.0, 0.0, GRIPPER_LENGTH),
-                         (0.0, 0.0, 0.0, 0.0),
+                         tf.transformations.quaternion_from_euler(0, 0, 0),
                          rospy.Time.now(),
                          "right_gripper_tip",
                          "right_gripper")
         br.sendTransform((0.0, 0.0, GRIPPER_LENGTH + IDEAL_FEEDING_DIST),
-                         (0.0, 0.0, 0.0, 0.0),
+                         tf.transformations.quaternion_from_euler(0, 0, 0),
                          rospy.Time.now(),
                         "ideal_mouth_tf",
-                         "right_gripper")
+                         "face")
         print("test")
         rate.sleep()
 

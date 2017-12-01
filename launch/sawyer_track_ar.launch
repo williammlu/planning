@@ -4,12 +4,22 @@
         <param name="max_new_marker_error"  type="double" value="0.08" />
         <param name="max_track_error"       type="double" value="0.2" />
         <param name="output_frame_from_msg" type="bool" value="false" />
-        <param name="output_frame" type="string" value="/reference/base" />
+        <param name="output_frame" type="string" value="base" />
 
-        <param name="marker_frame_prefix"   type="string" value="color_tracker_" />
-        <remap from="camera_image"  to="/io/internal_camera/head_camera/image_raw" />
-        <remap from="camera_info"   to="/io/internal_camera/head_camera/camera_info" />  
+        <param name="marker_frame_prefix"   type="string" value="head_marker_" />
+        <remap from="camera_image"  to="/io/internal_camera/right_hand_camera/image_raw" />
+        <remap from="camera_info"   to="/io/internal_camera/right_hand_camera/camera_info" />  
     </node>
 
+    <node name="ar_track_kinect" pkg="ar_track_alvar" type="individualMarkers" respawn="false" output="screen" >
+        <param name="marker_size"           type="double" value="17.8" />
+        <param name="max_new_marker_error"  type="double" value="0.08" />
+        <param name="max_track_error"       type="double" value="0.2" />
+        <param name="output_frame_from_msg" type="bool" value="false" />
+        <param name="output_frame" type="string" value="kinect2_rgb_optical_frame" />
 
+        <param name="marker_frame_prefix"   type="string" value="kinect_marker_" />
+        <remap from="camera_image"  to="/kinect2/hd/points" />
+        <remap from="camera_info"   to="/kinect2/hd/camera_info" />  
+    </node>
 </launch>
