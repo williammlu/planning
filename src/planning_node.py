@@ -19,6 +19,9 @@ from copy import deepcopy
 import tf
 import pdb
 
+import sensor_msgs.point_cloud2 as pc2
+from sensor_msgs.msg import PointCloud2, PointField
+
 rospy.init_node('planning')
 pose = None
 moveit_commander.roscpp_initialize(sys.argv)
@@ -93,7 +96,8 @@ def planning():
     actions = initialize()
     # print("Pose I: {}".format(pose_i.position.z))
     # print("Pose G: {}".format(pose_g.position.z))
-
+    
+    rospy.Subscriber("some_location_idk", PointCloud2, callback_kinect)
     
     for action in actions:
         action.execute()
@@ -125,6 +129,15 @@ def planning():
         # fixed pose things
 
     # rospy.spin()
+
+def callback_kinect(data):
+
+    gen = pc2.read_points(data, skip_nans=True, field_names=("x", "y", "z"))  
+    count = 0
+    for p in pc2.read_points(data, field_names = ("x", "y", "z"), skip_nans=True):
+        print("x : %f y : %f z: %f" % (p[0],p[1],p[2]))
+        scene.addCube("cube"+str(count), 1,p[0],p[1],p[2]) 
+    
 
 def quat_to_euler(orientation):
     quaternion = (
@@ -209,6 +222,10 @@ def initialize():
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
             continue
     
+    #testing planning scene constarints
+    scene.addBox("box1", 1,2,1,1,1,1) 
+    scene.addCube("cube1", 0.5,) 
+
 
     mm_pose = ar_pose1
     start_pose = deepcopy(pose)
