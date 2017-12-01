@@ -7,7 +7,7 @@ from geometry_msgs.msg import Point, Pose, PoseStamped, Quaternion
 from intera_interface import gripper as robot_gripper
 from moveit_msgs.msg import OrientationConstraint, Constraints
 
-# from planning.srv import TriggerPhase
+from planning.srv import TriggerPhase
 
 import numpy as np
 import moveit_commander
@@ -87,16 +87,19 @@ def initialize_gripper():
     assert right_gripper.is_ready()
 
 def combine_transforms(trans1, rot1, trans2, rot2):
-    trans1_mat = tf.transformations.translation_matrix(trans1)
-    rot1_mat   = tf.transformations.quaternion_matrix(rot1)
-    mat1 = np.dot(trans1_mat, rot1_mat)
+    # trans1_mat = tf.transformations.translation_matrix(trans1)
+    # rot1_mat   = tf.transformations.quaternion_matrix(rot1)
+    # mat1 = np.dot(trans1_mat, rot1_mat)
+    mat1 = tfl.fromTranslationRotation(trans1, rot1)
     
-    trans2_mat = tf.transformations.translation_matrix(trans2)
-    rot2_mat    = tf.transformations.quaternion_matrix(rot2)
-    mat2 = np.dot(trans2_mat, rot2_mat)
+    # trans2_mat = tf.transformations.translation_matrix(trans2)
+    # rot2_mat    = tf.transformations.quaternion_matrix(rot2)
+    # mat2 = np.dot(trans2_mat, rot2_mat)
+    mat2 = tfl.fromTranslationRotation(trans2, rot2)
 
-    mat3 = np.dot(mat1, mat2)
-    pdb.set_trace()
+    mat2 = np.linalg.inv(mat2)
+
+    mat3 = np.dot(mat2, mat1)
     trans3 = tf.transformations.translation_from_matrix(mat3)   
     rot3 = tf.transformations.quaternion_from_matrix(mat3)
 
@@ -156,19 +159,21 @@ def give_orientation(pose, orr_array):
     pose.orientation.y = orr_array[1]
     pose.orientation.z = orr_array[2]
     pose.orientation.w = orr_array[3]
+
 def get_marshmallow_pose():
     tf_listener = tf.TransformListener()
     while not rospy.is_shutdown():
         try:
-            (trans,rot) = tf_listener.lookupTransform('base', 'marshmellow_0', rospy.Time(0))
+            trans, _ = tf_listener.lookupTransform('base', 'marshmellow_0', rospy.Time(0))
             rev_finger_trans, rev_finger_rot = tfl.lookupTransform("right_gripper", "right_gripper_tip", rospy.Time(0))
 
+            rot = tf.transformations.quaternion_from_euler(0, 0, 0)
             combo_trans, combo_rot = combine_transforms(trans, rot, rev_finger_trans, rev_finger_rot)
             
             way_point_pose = Pose()
             way_point_pose.position.x = combo_trans[0]
             way_point_pose.position.y = combo_trans[1]
-            way_point_pose.position.z = combo_trans[2] + 0.2
+            way_point_pose.position.z = combo_trans[2] + 0.1
             way_point_pose.orientation = flip_quat(way_point_pose.orientation) # make sure to use appropriate coordinates
 
             marshmallow_pose = Pose()
@@ -194,7 +199,7 @@ def get_mouth_pose():
         try:
             mouth_pose = Pose()
             (trans,rot) = tf_listener.lookupTransform('base', 'face', rospy.Time(0))
-            rev_mouth_trans, rev_mouth_rot = tfl.lookupTransform("right_gripper","ideal_mouth_tf", rospy.Time(0))
+            rev_mouth_trans, rev_mouth_rot = tfl.lookupTransform("right_gripper", "ideal_mouth_tf",  rospy.Time(0))
 
             combo_trans, combo_rot= combine_transforms(trans,rot, rev_mouth_trans, rev_mouth_rot)
 
@@ -241,15 +246,21 @@ def move_to_marshmallow():
     gripper_pose1 = Pose()
     gripper_pose1.position = way_point_pose.position
     gripper_pose1.orientation = flip_quat(way_point_pose.orientation)
+    print "Way point pose"
+    print str(way_point_pose)
 
     gripper_pose2 = Pose()
     gripper_pose2.position = marshmallow_pose.position
     gripper_pose2.orientation = flip_quat(marshmallow_pose.orientation)
+    print "marshmallow pose"
+    print str(marshmallow_pose)
 
 
     actions.append(Action(Action.GRIPPER, Action.OPEN))
-    actions.append(Action(Action.MOVE_PRECISE, gripper_pose1))
-    actions.append(Action(Action.MOVE, gripper_pose2))
+    actions.append(Action(Action.MOVE, gripper_pose1))
+    actions.append(Action(Action.FUNCTION, lambda: rospy.sleep(10)))
+    actions.append(Action(Action.MOVE_PRECISE, gripper_pose2))
+    pdb.set_trace()
     execute_action_sequence(actions)
     return True
     
@@ -346,6 +357,7 @@ class Action():
             move(self.value)
         elif self.action_type == Action.MOVE_PRECISE:
             rospy.logdebug( "PRECISE MOVEMENT TO " + str(self.value))
+            move(self.value, do_precise_movement=True)
 
         elif self.action_type == Action.FUNCTION:
             rospy.logdebug( "RUNNING CUSTOM FUNCTION")
