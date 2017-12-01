@@ -11,6 +11,9 @@ from intera_core_msgs.msg import (EndpointState)
 from intera_interface import gripper as robot_gripper
 from moveit_msgs.msg import OrientationConstraint, Constraints
 from std_msgs.msg import String
+from planning.srv import *
+
+import numpy as np
 import moveit_commander
 import pdb
 import rospy
@@ -33,21 +36,10 @@ rev_mouth_trans, rev_mouth_rot = tfl.lookupTransform("ideal_mouth_tf", "right_gr
 
 should_print_pose = False
 
-def initialize_gripper():
-    right_gripper.reboot()
-    rospy.sleep(3.0)
-    right_gripper.calibrate()
-    #right_gripper.set_holding_force(10)
-    rospy.sleep(3.0)
-    assert right_gripper.is_ready()
-
 def main():
     #Set up the right gripper
 
     rate = rospy.Rate(10) # 10hz
-    def gripper_state_callback(message):
-        global pose
-        pose = message.pose
     def update_pose():
         global pose
         # .... some code here should take some time to let tfl updating its tf cache...
@@ -74,9 +66,19 @@ def main():
     rospy.logdebug("--------")
 
     initialize()
-    # execute_action_sequence(actions)
     move_to_marshmallow()
-    return
+
+    s = rospy.Service('move_robot', TriggerPhase, move_robot)
+    rospy.spin()
+
+
+def initialize_gripper():
+    right_gripper.reboot()
+    rospy.sleep(3.0)
+    right_gripper.calibrate()
+    #right_gripper.set_holding_force(10)
+    rospy.sleep(3.0)
+    assert right_gripper.is_ready()
 
 def combine_transforms(trans1, rot1, trans2, rot2):
     trans1_mat = tf.transformations.translation_matrix(trans1)
@@ -99,7 +101,6 @@ def execute_action_sequence(actions):
         action.execute()
     rospy.logdebug( "Action sequence finished")
     return 
-
      
 
 def quat_to_euler(orientation):
@@ -151,6 +152,8 @@ def get_marshmallow_pose():
         return ar_pose1
     except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
         continue
+
+
 def get_mouth_pose():
     tf_listener = tf.TransformListener()
     while not rospy.is_shutdown():
@@ -193,7 +196,24 @@ def initialize():
     
     rospy.logdebug('Finished initializing, wait {} seconds'.format(2.0))
     rospy.sleep(wait_time)
-    return actions
+
+def move_robot(request):
+    phase_id = request.phase
+    print "phase_id is %d"%phase_id
+    if phase_id == 0:
+        success =  move_to_marshmallow()
+    elif phase_id == 1:
+        success =  move_to_mouth()
+    elif phase_id == 2:
+        success =  grip_marshmallow()
+    elif phase_id == 3:
+        success =  release_marshmallow()
+    elif phase_id == 4:
+        success =  move_to_initial_state()
+    message = "placeholder"
+
+    return TriggerPhaseResponse(success, message)
+
 
 def move_to_marshmallow():
     marshmallow_pose = get_marshmallow_pose()
