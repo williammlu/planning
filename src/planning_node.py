@@ -164,22 +164,20 @@ def get_marshmallow_pose():
     tf_listener = tf.TransformListener()
     while not rospy.is_shutdown():
         try:
-            trans, _ = tf_listener.lookupTransform('base', 'marshmellow_0', rospy.Time(0))
-            rev_finger_trans, rev_finger_rot = tfl.lookupTransform("right_gripper", "right_gripper_tip", rospy.Time(0))
+            waypoint_pos, _ = tf_listener.lookupTransform('base', 'marshmallow_waypoint_goal', rospy.Time(0))
 
-            rot = tf.transformations.quaternion_from_euler(0, 0, 0)
-            combo_trans, combo_rot = combine_transforms(trans, rot, rev_finger_trans, rev_finger_rot)
+            goal_pos, _ = tf_listener.lookupTransform('base', 'marshmallow_final_goal', rospy.Time(0))
+
             
             way_point_pose = Pose()
-            way_point_pose.position.x = combo_trans[0]
-            way_point_pose.position.y = combo_trans[1]
-            way_point_pose.position.z = combo_trans[2] + 0.1
-            way_point_pose.orientation = flip_quat(way_point_pose.orientation) # make sure to use appropriate coordinates
+            way_point_pose.position.x = waypoint_pos[0]
+            way_point_pose.position.y = waypoint_pos[1]
+            way_point_pose.position.z = waypoint_pos[2]
 
             marshmallow_pose = Pose()
-            marshmallow_pose.position.x = combo_trans[0]
-            marshmallow_pose.position.y = combo_trans[1]
-            marshmallow_pose.position.z = combo_trans[2]
+            marshmallow_pose.position.x = goal_pos[0]
+            marshmallow_pose.position.y = goal_pos[1]
+            marshmallow_pose.position.z = goal_pos[2]
 
             vertical_dir= tf.transformations.quaternion_from_euler(0,0,-np.pi/2) # points in positive z direction
 
@@ -198,15 +196,14 @@ def get_mouth_pose():
     while not rospy.is_shutdown():
         try:
             mouth_pose = Pose()
-            (trans,rot) = tf_listener.lookupTransform('base', 'face', rospy.Time(0))
-            rev_mouth_trans, rev_mouth_rot = tfl.lookupTransform("right_gripper", "ideal_mouth_tf",  rospy.Time(0))
+            (trans,rot) = tf_listener.lookupTransform('base', 'face_gripper_goal', rospy.Time(0))
 
-            combo_trans, combo_rot= combine_transforms(trans,rot, rev_mouth_trans, rev_mouth_rot)
+            mouth_pose.position.x = trans[0]
+            mouth_pose.position.y = trans[1]
+            mouth_pose.position.z = trans[2]
+            
+            give_orientation(mouth_pose, rot)
 
-            mouth_pose.position.x = combo_trans[0]
-            mouth_pose.position.y = combo_trans[1]
-            mouth_pose.position.z = combo_trans[2]
-            mouth_pose.orientation = mouth_pose.orientation # TODO make sure you use real mouth orientations aka flipped kinect quaternion
             print "Mouth pose \n" + str(mouth_pose)
             return mouth_pose
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
