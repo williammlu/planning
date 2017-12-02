@@ -21,6 +21,15 @@ moveit_commander.roscpp_initialize(sys.argv)
 right_gripper = robot_gripper.Gripper('right')
 robot = moveit_commander.RobotCommander()
 scene = moveit_commander.PlanningSceneInterface()
+scene_publisher = rospy.Publisher('planning_scene', PlanningScene, 10)
+
+# relative to base
+right_wall_dist = 0.6096
+left_wall_dist = -0.6096
+back_wall_dist = -0.6096
+table_height = -0.115
+table_dist = 0.3
+
 right_arm = moveit_commander.MoveGroupCommander('right_arm')
 # right_arm.set_planner_id('RRTConnectkConfigDefault')
 right_arm.set_planning_time(20)
@@ -105,6 +114,12 @@ def combine_transforms(trans1, rot1, trans2, rot2):
 
     return trans3, rot3
 
+def add_constraint(self, name, x, y, z, xs, xy, xz):
+    p = PoseStamped()
+    p.pose.position.x = x
+    p.pose.position.y = y
+    p.pose.position.z = z
+    scene.attach_box('base', name, p, [xs,ys,zs])
             
 def execute_action_sequence(actions):
     for action in actions:
@@ -220,6 +235,12 @@ def initialize():
 
     # rospy.logdebug('Finished initializing, wait {} seconds'.format(2.0))
     rospy.sleep(2.0)
+    self.add_constraint('right_wall', 0, right_wall_dist, 0, 4, 0.1, 4) 
+    self.add_constraint('left_wall', 0, left_wall_dist, 0, 4, 0.1, 4)
+    self.add_constraint('back_wall', back_wall_dist, 0, 0,0.1, 4, 4)
+    #self.add_constraint('table', 0,308, 0, -0.115, 4, 4, 0.1 )
+    mouth_pose = get_mouth_pose()
+    #self.add_constraint('person',mouth_pose.x, mouth_pose.y, mouth_pose.z, 4,4,4)
 
 def move_robot(request):
     phase_id = request.phase
