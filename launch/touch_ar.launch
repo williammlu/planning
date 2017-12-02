@@ -12,7 +12,7 @@
   type="joint_trajectory_action_server.py" />
 
 
-
+<node name="camera_display" pkg="intera_examples" type="camera_display.py" args="-c right_hand_camera"/>
 
 
 
@@ -179,5 +179,6 @@
 
 <node name="planning_node" pkg="planning" type="planning_node.py" />
 
+<node name="broadcast_tf" pkg="planning" type="tf_broadcast.py" />
 
 </launch>
