@@ -18,25 +18,35 @@ import sys
 import tf
 
 
-GRIPPER_LENGTH = 0.07 # 7cm long
-IDEAL_FEEDING_DIST = 0.05 # how many cm away from mouth should gripper go?
-tf_listener = tf.TransformListener()
+GRIPPER_LENGTH = 0.09 # 9cm long
+IDEAL_FEEDING_DIST = 0.10 # how many cm away from mouth should gripper go?
 
 def main():
     rospy.init_node('broadcast_tf')
+    tf_listener = tf.TransformListener()
     br = tf.TransformBroadcaster()
     rate = rospy.Rate(10.0)
+    rospy.sleep(1.0)
     while not rospy.is_shutdown():
-        m_pos, _ = tf_listener.lookupTransform('base', 'marshmellow_0', rospy.Time(0))
-        face_pos, face_orr = tf_listener.lookupTransform('base', 'marshmellow_0', rospy.Time(0))
+        m_pos = None
+        face_pos = None
+        try:
+            m_pos, _ = tf_listener.lookupTransform('base', 'marshmellow_0', rospy.Time(0))
+        except Exception as e:
+            print(str(e))
+
+        try:
+            face_pos, face_orr = tf_listener.lookupTransform('base', 'face', rospy.Time(0))
+        except Exception as e:
+            print(str(e))
 
         if m_pos:
-            br.sendTransform((m_pos.x, m_pos.y, m_pos.z + 0.10 + GRIPPER_LENGTH),
+            br.sendTransform((m_pos[0], m_pos[1], m_pos[2] + 0.15 + GRIPPER_LENGTH),
                              tf.transformations.quaternion_from_euler(0, 0, 0),
                              rospy.Time.now(),
                              "marshmallow_waypoint_goal",
                              "base")
-            br.sendTransform((m_pos.x, m_pos.y, m_pos.z + GRIPPER_LENGTH),
+            br.sendTransform((m_pos[0], m_pos[1], m_pos[2] + GRIPPER_LENGTH + 0.02),
                              tf.transformations.quaternion_from_euler(0, 0, 0),
                              rospy.Time.now(),
                              "marshmallow_final_goal",
@@ -44,9 +54,9 @@ def main():
         else:
             print("No marshmallow_pose detected")
         
-e
+
         if face_pos:
-            br.sendTransform((0.0, 0.0, IDEAL_FEEDING_DIST + GRIPPER_LENGTH),
+            br.sendTransform((0.0, 0.0, -IDEAL_FEEDING_DIST - GRIPPER_LENGTH),
                              tf.transformations.quaternion_from_euler(0, 0, 0),
                              rospy.Time.now(),
                              "face_gripper_goal",

@@ -71,8 +71,11 @@ def main():
     # s = rospy.Service('move_robot', TriggerPhase, move_robot)
     print "Launching service"
     while True:
-        if raw_input("Type anything"):
+        if raw_input("Prepare to move"):
             move_to_marshmallow()
+            grip_marshmallow()
+            raw_input("Prepare to move to mouth")
+            move_to_mouth()
         else:
             break
 
@@ -81,10 +84,13 @@ def main():
 def initialize_gripper():
     right_gripper.reboot()
     rospy.sleep(3.0)
+    print("calibrating gripper...")
     right_gripper.calibrate()
+    print("done_calibrating gripper...")
+    rospy.sleep(2.0)
     #right_gripper.set_holding_force(10)
-    rospy.sleep(3.0)
     assert right_gripper.is_ready()
+    right_gripper.open()
 
 def combine_transforms(trans1, rot1, trans2, rot2):
     # trans1_mat = tf.transformations.translation_matrix(trans1)
@@ -211,8 +217,9 @@ def get_mouth_pose():
 
 
 def initialize():
+    initialize_gripper()
     assert right_gripper.is_ready()
-    right_gripper.open()
+    print("Initialized  gripper")
     actions = []
 
     # rospy.logdebug('Finished initializing, wait {} seconds'.format(2.0))
@@ -255,16 +262,16 @@ def move_to_marshmallow():
 
     actions.append(Action(Action.GRIPPER, Action.OPEN))
     actions.append(Action(Action.MOVE, gripper_pose1))
-    actions.append(Action(Action.FUNCTION, lambda: rospy.sleep(10)))
+    actions.append(Action(Action.FUNCTION, lambda: rospy.sleep(2)))
     actions.append(Action(Action.MOVE_PRECISE, gripper_pose2))
-    pdb.set_trace()
+    # pdb.set_trace()
     execute_action_sequence(actions)
     return True
     
 def move_to_mouth():
     mouth_pose = get_mouth_pose()
     gripper_pose = Pose()
-    gripper_pose.position = mouth_pose.postion
+    gripper_pose.position = mouth_pose.position
     gripper_pose.orientation = mouth_pose.orientation # don't flip since z goes into mouth
 
     actions = []
@@ -287,6 +294,7 @@ def move_to_initial_state():
 
 def move(goal_pose, has_orientation_constraint=False, do_precise_movement=False):
 
+    import pdb; pdb.set_trace()
     right_arm.set_pose_target(goal_pose)
     right_arm.set_start_state_to_current_state()
 
@@ -305,11 +313,12 @@ def move(goal_pose, has_orientation_constraint=False, do_precise_movement=False)
 
     if do_precise_movement:
         right_arm.set_goal_position_tolerance(0.005) 
-        right_arm.set_max_velocity_scaling_factor(0.25) # make it slow
-        right_arm.set_num_planning_attempts(5) # take best of 5 for accuracy of 5mm
+        right_arm.set_max_velocity_scaling_factor(0.10) # make it slow
+        right_arm.set_num_planning_attempts(10) # take best of 5 for accuracy of 5mm
     else:
+        right_arm.set_max_velocity_scaling_factor(0.5) # make it slower
         right_arm.set_goal_position_tolerance(0.01) 
-        right_arm.set_num_planning_attempts(3) # take best of 3 for accuracy of 1 cm
+        right_arm.set_num_planning_attempts(5) # take best of 3 for accuracy of 1 cm
     print pose
 
 
