@@ -27,6 +27,9 @@ right_arm.set_planning_time(20)
 tfl = tf.TransformListener()
 should_print_pose = False
 
+saved_marshmallow_pose = None
+saved_mouth_pose = None
+
 
 def main():
     #Set up the right gripper
@@ -48,8 +51,6 @@ def main():
         if should_print_pose:
             print "base -> right_gripper tip pose\n" + str(pose)
 
-    # rospy.Subscriber("mouth_pose", Pose, callback)
-    # rospy.Subscriber("marshmallow_pose", Pose, callback)
     rospy.sleep(1)
     global pose
 
@@ -72,10 +73,12 @@ def main():
     print "Launching service"
     while True:
         if raw_input("Prepare to move"):
+            save_poses() # save current poses
             move_to_marshmallow()
             grip_marshmallow()
             raw_input("Prepare to move to mouth")
             move_to_mouth()
+            delete_poses() # clear poses
         else:
             break
 
@@ -91,25 +94,6 @@ def initialize_gripper():
     #right_gripper.set_holding_force(10)
     assert right_gripper.is_ready()
     right_gripper.open()
-
-def combine_transforms(trans1, rot1, trans2, rot2):
-    # trans1_mat = tf.transformations.translation_matrix(trans1)
-    # rot1_mat   = tf.transformations.quaternion_matrix(rot1)
-    # mat1 = np.dot(trans1_mat, rot1_mat)
-    mat1 = tfl.fromTranslationRotation(trans1, rot1)
-    
-    # trans2_mat = tf.transformations.translation_matrix(trans2)
-    # rot2_mat    = tf.transformations.quaternion_matrix(rot2)
-    # mat2 = np.dot(trans2_mat, rot2_mat)
-    mat2 = tfl.fromTranslationRotation(trans2, rot2)
-
-    mat2 = np.linalg.inv(mat2)
-
-    mat3 = np.dot(mat2, mat1)
-    trans3 = tf.transformations.translation_from_matrix(mat3)   
-    rot3 = tf.transformations.quaternion_from_matrix(mat3)
-
-    return trans3, rot3
 
             
 def execute_action_sequence(actions):
@@ -166,7 +150,10 @@ def give_orientation(pose, orr_array):
     pose.orientation.z = orr_array[2]
     pose.orientation.w = orr_array[3]
 
-def get_marshmallow_pose():
+def get_marshmallow_pose(should_remember=False):
+    global saved_marshmallow_pose
+    if saved_marshmallow_pose:
+        return saved_marshmallow_pose
     tf_listener = tf.TransformListener()
     while not rospy.is_shutdown():
         try:
@@ -192,12 +179,18 @@ def get_marshmallow_pose():
             
 
             print "Marshmallow Pose \n" + str(marshmallow_pose)
+            if should_remember:
+                saved_marshmallow_pose = (waypoint_pos, marshmallow_pose)
+                print "Saved marshmallow pose"
             return way_point_pose, marshmallow_pose
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
             continue
 
 
-def get_mouth_pose():
+def get_mouth_pose(should_remember=False):
+    global saved_mouth_pose
+    if saved_mouth_pose:
+        return saved_mouth_pose
     tf_listener = tf.TransformListener()
     while not rospy.is_shutdown():
         try:
@@ -211,6 +204,9 @@ def get_mouth_pose():
             give_orientation(mouth_pose, rot)
 
             print "Mouth pose \n" + str(mouth_pose)
+            if should_remember:
+                saved_mouth_pose = mouth_pose
+                print "Saved mouth pose"
             return mouth_pose
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
             continue
@@ -242,6 +238,18 @@ def move_robot(request):
 
     return TriggerPhaseResponse(success, message)
 
+def save_poses():
+    get_marshmallow_pose(should_remember=True)
+    get_mouth_pose(should_remember=True)
+    rospy.sleep(1)
+    print "Finished saving poses"
+
+def delete_poses():
+    global saved_marshmallow_pose 
+    global saved_mouth_pose
+    saved_marshmallow_pose = None
+    saved_mouth_pose = None
+    print "Deleted poses"
 
 def move_to_marshmallow():
     way_point_pose, marshmallow_pose = get_marshmallow_pose()
