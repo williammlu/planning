@@ -179,6 +179,5 @@
 
 <node name="planning_node" pkg="planning" type="planning_node.py" />
 
-<node name="broadcast_tf" pkg="planning" type="tf_broadcast.py" />
 
 </launch>

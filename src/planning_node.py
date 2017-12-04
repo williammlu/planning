@@ -58,19 +58,12 @@ def main():
     rospy.logdebug(str(pose))
     rospy.logdebug("--------")
 
-    # rospy.Subscriber("some_location_idk", PointCloud2, callback_kinect)
-    
-    # for action in actions:
-        # action.execute()
-    # rospy.logdebug( "Action sequence finished")
-    # return
-            
-     
     initialize()
-    
-
-    # s = rospy.Service('move_robot', TriggerPhase, move_robot)
+    s = rospy.Service('move_robot', TriggerPhase, move_robot)
     print "Launching service"
+
+
+    # FOR TESTING
     while True:
         if raw_input("Prepare to move"):
             save_poses() # save current poses
@@ -95,12 +88,8 @@ def initialize_gripper():
     assert right_gripper.is_ready()
     right_gripper.open()
 
-            
-def execute_action_sequence(actions):
-    for action in actions:
-        action.execute()
-    rospy.logdebug( "Action sequence finished")
-    return 
+
+
      
 # 
 # def callback_kinect(data):
@@ -111,46 +100,12 @@ def execute_action_sequence(actions):
         # scene.addCube("cube"+str(count), 0.01 ,p[0],p[1],p[2]) #create small cube constraint at each point 
     
 
-def quat_to_euler(orientation):
-    quaternion = (
-        orientation.x,
-        orientation.y,
-        orientation.z,
-        orientation.w
-    )
-    euler = tf.transformations.euler_from_quaternion(quaternion)
-    roll = euler[0]
-    pitch = euler[1]
-    yaw = euler[2]
-    return (roll,pitch,yaw)
-
-def euler_to_quat(roll, pitch, yaw):
-    pose = Pose()
-    quaternion = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
-    #type(pose) = geometry_msgs.msg.Pose
-    pose.orientation.x = quaternion[0]
-    pose.orientation.y = quaternion[1]
-    pose.orientation.z = quaternion[2]
-    pose.orientation.w = quaternion[3]
-    return pose.orientation
-    
-
-"""
-Reverse direction z basis vector, z axis corresponds by yaw
-"""
-def flip_quat(orientation):
-    r,p,y = quat_to_euler(orientation)
-    r += np.pi
-    return euler_to_quat(r,p,y)
-    
-
-def give_orientation(pose, orr_array):
-    pose.orientation.x = orr_array[0]
-    pose.orientation.y = orr_array[1]
-    pose.orientation.z = orr_array[2]
-    pose.orientation.w = orr_array[3]
 
 def get_marshmallow_pose(should_remember=False):
+    """
+    Returns saved marshmallow poses if available
+    Otherwise wait for both waypoint and final marshmallow tfs.
+    """
     global saved_marshmallow_pose
     if saved_marshmallow_pose:
         return saved_marshmallow_pose
@@ -161,7 +116,6 @@ def get_marshmallow_pose(should_remember=False):
 
             goal_pos, _ = tf_listener.lookupTransform('base', 'marshmallow_final_goal', rospy.Time(0))
 
-            
             way_point_pose = Pose()
             way_point_pose.position.x = waypoint_pos[0]
             way_point_pose.position.y = waypoint_pos[1]
@@ -176,7 +130,7 @@ def get_marshmallow_pose(should_remember=False):
 
             give_orientation(way_point_pose, vertical_dir)
             give_orientation(marshmallow_pose, vertical_dir)
-            
+
 
             print "Marshmallow Pose \n" + str(marshmallow_pose)
             if should_remember:
@@ -188,6 +142,10 @@ def get_marshmallow_pose(should_remember=False):
 
 
 def get_mouth_pose(should_remember=False):
+    """
+    Returns saved mouth tf as pose if available
+    Otherwise wait to return mouth tf as Pose when available
+    """
     global saved_mouth_pose
     if saved_mouth_pose:
         return saved_mouth_pose
@@ -200,7 +158,7 @@ def get_mouth_pose(should_remember=False):
             mouth_pose.position.x = trans[0]
             mouth_pose.position.y = trans[1]
             mouth_pose.position.z = trans[2]
-            
+
             give_orientation(mouth_pose, rot)
 
             print "Mouth pose \n" + str(mouth_pose)
@@ -213,15 +171,20 @@ def get_mouth_pose(should_remember=False):
 
 
 def initialize():
+    """
+    Initializes gripper and checks if it is ready
+    """
     initialize_gripper()
     assert right_gripper.is_ready()
     print("Initialized  gripper")
-    actions = []
-
-    # rospy.logdebug('Finished initializing, wait {} seconds'.format(2.0))
     rospy.sleep(2.0)
 
+
 def move_robot(request):
+    """
+    Callback for ROS service. Does one of several predefined actions
+    """
+
     phase_id = request.phase
     print "phase_id is {}".format(phase_id)
     if phase_id == 0:
@@ -233,25 +196,46 @@ def move_robot(request):
     elif phase_id == 3:
         success =  release_marshmallow()
     elif phase_id == 4:
-        success =  move_to_initial_state()
+        success =  move_to_start_state()
+    elif phase_id == 5:
+        success =  perform_full_sequence()
     message = "placeholder"
 
     return TriggerPhaseResponse(success, message)
 
 def save_poses():
+    """
+    Save marshmallow and mouth poses globally
+    """
     get_marshmallow_pose(should_remember=True)
     get_mouth_pose(should_remember=True)
     rospy.sleep(1)
     print "Finished saving poses"
 
 def delete_poses():
-    global saved_marshmallow_pose 
+    """
+    Nullify marshmallow and mouth poses globally
+    """
+    global saved_marshmallow_pose
     global saved_mouth_pose
     saved_marshmallow_pose = None
     saved_mouth_pose = None
     print "Deleted poses"
 
+
+def perform_full_sequence():
+    move_to_start_state()
+    move_to_marshmallow()
+    move_to_mouth()
+    grip_marshmallow()
+    release_marshmallow()
+
 def move_to_marshmallow():
+    """
+    Two phase motion to move gripper to marshmallow.
+    1 - Move with lesser precision to a waypoint above the marshmallow
+    2 - Move with high precision from waypoint to optimal gripping position
+    """
     way_point_pose, marshmallow_pose = get_marshmallow_pose()
     actions = []
 
@@ -275,8 +259,11 @@ def move_to_marshmallow():
     # pdb.set_trace()
     execute_action_sequence(actions)
     return True
-    
+
 def move_to_mouth():
+    """
+    Moves gripper to mouth position. Obtains mouth goal pose (which could be saved) and moves to it.
+    """
     mouth_pose = get_mouth_pose()
     gripper_pose = Pose()
     gripper_pose.position = mouth_pose.position
@@ -289,19 +276,19 @@ def move_to_mouth():
 
 
 def grip_marshmallow():
+    """
+    Closes gripper
+    """
     actions = []
     actions.append(Action(Action.GRIPPER, Action.CLOSE))
     execute_action_sequence(actions)
     return True
-    
-
-def move_to_initial_state():
-    # TODO
-    return  True
 
 
 def move(goal_pose, has_orientation_constraint=False, do_precise_movement=False):
-
+    """
+    Move end effector to a goal pose. Can enforce goal position and orientation constraints.
+    """
     import pdb; pdb.set_trace()
     right_arm.set_pose_target(goal_pose)
     right_arm.set_start_state_to_current_state()
@@ -334,10 +321,10 @@ def move(goal_pose, has_orientation_constraint=False, do_precise_movement=False)
     right_arm.execute(right_plan)
 
 
-
 def do_grip():
-    # c = 1
-    # MAX_TRIES=5
+    """
+    Close gripper with intention of grasping object. Detect if object has been gripped.
+    """
     assert right_gripper.is_ready()
     right_gripper.open()
     rospy.sleep(2.0)
@@ -347,6 +334,11 @@ def do_grip():
 
 
 class Action():
+    """
+    Wrapper class for defining and executing certain actions.
+    This is helpful when chaining multiple actions together.
+    """
+
     GRIPPER=1
     MOVE=2
     FUNCTION=3
@@ -354,10 +346,11 @@ class Action():
 
     CLOSE = -1
     OPEN = -2
+
     def __init__(self, action_type, value):
         self.action_type = action_type
         self.value = value
-    
+
     def execute(self):
         if self.action_type == Action.GRIPPER:
             if self.value == Action.CLOSE:
@@ -378,8 +371,67 @@ class Action():
             self.value()
 
 
+def execute_action_sequence(actions):
+    """
+    Helper function to execute a list of Action objects
+    """
+    for action in actions:
+        action.execute()
+    rospy.logdebug( "Action sequence finished")
+    return 
+
+def quat_to_euler(orientation):
+    """
+    Convert pose's orientation (quaternion) to Euler angles
+    """
+    quaternion = (
+        orientation.x,
+        orientation.y,
+        orientation.z,
+        orientation.w
+    )
+    euler = tf.transformations.euler_from_quaternion(quaternion)
+    roll = euler[0]
+    pitch = euler[1]
+    yaw = euler[2]
+    return (roll,pitch,yaw)
+
+
+def euler_to_quat(roll, pitch, yaw):
+    """
+    Convert from Euler angles to pose's orientation (quaternion)
+    """
+    pose = Pose()
+    quaternion = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
+    pose.orientation.x = quaternion[0]
+    pose.orientation.y = quaternion[1]
+    pose.orientation.z = quaternion[2]
+    pose.orientation.w = quaternion[3]
+    return pose.orientation
+
+
+def flip_quat(orientation):
+    """
+    Given an Pose orientation, find orientation with inverted z basis vector, by turning roll by 180 degrees.
+    """
+    r,p,y = quat_to_euler(orientation)
+    r += np.pi
+    return euler_to_quat(r,p,y)
+
+
+def give_orientation(pose, orr_array):
+    """
+    Helper function to assign pose's orientation according to quaterion in list form.
+    """
+    pose.orientation.x = orr_array[0]
+    pose.orientation.y = orr_array[1]
+    pose.orientation.z = orr_array[2]
+    pose.orientation.w = orr_array[3]
+
+
 if __name__ == '__main__':
     try:
         main()
     except rospy.ROSInterruptException:
         pass
+
