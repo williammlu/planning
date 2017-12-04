@@ -169,6 +169,11 @@ def get_mouth_pose(should_remember=False):
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
             continue
 
+def move_to_start_state():
+    default_joints = {'head_pan':-4.2551240234375, 'right_j0': -2.3731005859375, 'right_j1':-2.4028828125, 'right_j2':1.658787109375, 'right_j3': 0.7297041015625, 'right_j4':1.2216513671875, 'right_j5':0.31765625, 'right_j6':-4.6892177734375, 'torso_t0':0.0}
+    actions = []
+    actions.append(Action(Action.MOVE, default_joints))
+    execute_action_sequence(actions)
 
 def initialize():
     """
@@ -290,7 +295,10 @@ def move(goal_pose, has_orientation_constraint=False, do_precise_movement=False)
     Move end effector to a goal pose. Can enforce goal position and orientation constraints.
     """
     import pdb; pdb.set_trace()
-    right_arm.set_pose_target(goal_pose)
+    if type(goal_pose) is dict:
+        right_arm.set_joint_target_value(default_joints)
+    else:
+        right_arm.set_pose_target(goal_pose)
     right_arm.set_start_state_to_current_state()
 
     if (has_orientation_constraint):

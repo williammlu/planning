@@ -33,11 +33,14 @@ right_arm = moveit_commander.MoveGroupCommander('right_arm')
 def planning():
 
     rate = rospy.Rate(10) # 10hz
-    limb = Limb('right_arm')
+    # limb = Limb('right_arm')
     default_joints = {'head_pan':-4.2551240234375, 'right_j0': -2.3731005859375, 'right_j1':-2.4028828125, 'right_j2':1.658787109375, 'right_j3': 0.7297041015625, 'right_j4':1.2216513671875, 'right_j5':0.31765625, 'right_j6':-4.6892177734375, 'torso_t0':0.0}
     
     #right_arm.set_joint_positions(default_joints)
-    limb.set_joint_positions(default_joints)
+    # limb.set_joint_positions(default_joints)
+    right_arm.set_joint_target_value(default_joints)
+    right_plan = right_arm.plan()
+    right_arm.execute(right_plan)
 
 
 
