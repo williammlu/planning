@@ -34,7 +34,6 @@ tfl = tf.TransformListener()
 
 def planning():
     #Set up the right gripper
-
     rate = rospy.Rate(10) # 10hz
     def gripper_state_callback(message):
         global pose

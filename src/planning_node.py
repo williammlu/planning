@@ -325,13 +325,18 @@ def do_grip():
     """
     Close gripper with intention of grasping object. Detect if object has been gripped.
     """
+    rospy.sleep(1.0)
     assert right_gripper.is_ready()
     right_gripper.open()
     rospy.sleep(2.0)
     assert right_gripper.is_ready()
     right_gripper.close()
-    rospy.sleep(2.0)
-
+    for _ in range(3):
+        if right_gripper.is_gripping() and not right_gripper.get_force() > 0:
+            break
+        right_gripper.open()
+        rospy.sleep(2)
+        right_gripper.close()
 
 class Action():
     """
