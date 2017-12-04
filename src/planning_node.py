@@ -192,9 +192,9 @@ def move_robot(request):
     elif phase_id == 1:
         success =  move_to_mouth()
     elif phase_id == 2:
-        success =  grip_marshmallow()
-    elif phase_id == 3:
         success =  release_marshmallow()
+    elif phase_id == 3:
+        success =  grip_marshmallow()
     elif phase_id == 4:
         success =  move_to_start_state()
     elif phase_id == 5:
