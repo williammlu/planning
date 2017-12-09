@@ -12,7 +12,7 @@
   type="joint_trajectory_action_server.py" />
 
 
-
+<node name="camera_display" pkg="intera_examples" type="camera_display.py" args="-c right_hand_camera"/>
 
 
 
@@ -128,6 +128,7 @@
     <arg name="camera_link_pose" default="$(arg camera_link_pose)"/>
     <arg name="moveit_sensor_manager" value="sawyer" />
   </include>
+  <node name="broadcast_tf" pkg="planning" type="tf_broadcast.py" />
 
   <!-- Start the actual move_group node/action server -->
   <node name="move_group" launch-prefix="$(arg launch_prefix)" pkg="moveit_ros_move_group" type="move_group" respawn="false" output="screen" args="joint_states:=/robot/joint_states  $(arg command_args)">
@@ -157,6 +158,26 @@
     <param name="planning_scene_monitor/publish_state_updates" value="$(arg publish_monitored_planning_scene)" />
     <param name="planning_scene_monitor/publish_transforms_updates" value="$(arg publish_monitored_planning_scene)" />
   </node>
+<node name="usb_cam" pkg="usb_cam" type="usb_cam_node"  output="screen" >
+    <param name="video_device" value="/dev/video0" />
+
+    <!-- Parameters for Microsoft cameras -->
+    <param name="image_width" value="1280" />
+    <param name="image_height" value="720" />
+
+    <!-- Parameters for Logitech cameras -->
+    <!-- <param name="image_width" value="640" /> -->
+    <!-- <param name="image_height" value="472" /> -->
+
+    <param name="pixel_format" value="mjpeg" />
+    <param name="pixel_format" value="yuyv" />
+    <param name="camera_frame_id" value="usb_cam" />
+    <param name="io_method" value="mmap" />
+  </node>
+  <node name="detector_node" pkg="mouth_detector" type="detector_node.py" required="true" output="screen">
+</node>
+
 <node name="planning_node" pkg="planning" type="planning_node.py" />
+
 
 </launch>

@@ -6,16 +6,32 @@ find_package(catkin
   COMPONENTS
   rospy
   intera_core_msgs
+  message_generation
 )
 
 catkin_python_setup()
 
+## Generate services in the 'srv' folder
+add_service_files(
+  FILES
+  TriggerPhase.srv
+)
+
+## Generate added messages and services with any dependencies listed here
+generate_messages(
+  DEPENDENCIES
+  sensor_msgs
+  std_msgs
+)
 
 catkin_package(
   CATKIN_DEPENDS
   rospy
   intera_core_msgs
 )
+
+
+
 
 install(
   DIRECTORY scripts/
